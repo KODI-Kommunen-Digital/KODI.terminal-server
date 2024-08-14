@@ -39,7 +39,7 @@ app.get("/", (req, res) => {
     res.send(message);
 });
 
-app.get("/startPayment", (req,res) => {
+app.get("/startpayment", (req,res) => {
     const amount = req.query.amount ? req.query.amount : false
     if(!amount) {
         res.send(`Amount is not sent`, 400)
