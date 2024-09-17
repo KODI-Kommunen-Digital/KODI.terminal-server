@@ -3,12 +3,10 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const helmet = require("helmet");
-// const morgan = require("morgan");
-const AppError = require("./utils/appError");
-// const fileUpload = require("express-fileupload");
-const headers = require("./middlewares/headers")
 const ipfilter = require('express-ipfilter').IpFilter
 const IpDeniedError = require('express-ipfilter').IpDeniedError
+const barcodeScanner = require('./barcodeScanner');
+// const nfcReader = require('./nfcReader');
 
 
 
@@ -33,7 +31,7 @@ app.use((err, req, res, _next) => {
   })
 
 app.use(cors())
-app.use(headers)
+// app.use(headers)
 
 app.get("/", (req, res) => {
     res.send(message);
@@ -66,6 +64,12 @@ app.get("/startpayment", (req,res) => {
 app.all("*", (req, res, next) => {
     next(new AppError(`The URL ${req.originalUrl} does not exists`, 404));
 });
-app.listen(process.env.PORT, () => {
-    console.log(`listening on port ${process.env.PORT}`);
+
+
+// nfcReader.start();
+barcodeScanner.start();
+
+const port = process.env.PORT || 3050
+app.listen(port, () => {
+    console.log(`listening on port ${port}`);
 });
