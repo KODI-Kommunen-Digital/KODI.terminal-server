@@ -5,7 +5,7 @@ const { getEnableValidatorCommand, getPollCommand } = require('./config/serialUt
 const serialConfig = require('./config/serialConfig');
 
 function start() {
-    const port = new SerialPort(serialConfig.port, { baudRate: serialConfig.baudRate });
+    const port = new SerialPort({ path: serialConfig.port, baudRate: serialConfig.baudRate });
 
     port.on('open', () => {
         console.log(`Serial Port Opened on ${serialConfig.port} at ${serialConfig.baudRate} baud rate`);
