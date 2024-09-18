@@ -8,6 +8,7 @@ const serialConfig = require('./config/serialConfig');
 const SSP_CMD_SYNC = 0x11;
 const SSP_CMD_ENABLE = 0x0A;
 const SSP_CMD_POLL = 0x07;
+const SSP_CMD_CONFIGURE_BEZEL = 0x54; // New constant for bezel configuration
 
 const SSP_RESP_OK = 0xF0;
 const SSP_EVENT_READ = 0xEF;
@@ -20,7 +21,7 @@ function start() {
     const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 
     port.on('open', async () => {
-        console.log('Serial Port Opened on COM1 at 9600 baud rate');
+        console.log(`Serial Port Opened on ${serialConfig.port} at ${serialConfig.baudRate} baud rate`);
         
         try {
             await sendCommand(port, createCommand(SSP_CMD_SYNC));
@@ -28,6 +29,9 @@ function start() {
             
             await sendCommand(port, createCommand(SSP_CMD_ENABLE));
             console.log('NV200 enabled');
+
+            await configureBezel(port, 0, 255, 0); // Configure green bezel
+            console.log('Bezel configured to show green light');
 
             // Start polling
             setInterval(() => {
@@ -80,6 +84,11 @@ function sendCommand(port, command) {
             }
         });
     });
+}
+
+function configureBezel(port, red, green, blue) {
+    const data = [red, green, blue, 1, 0]; // RGB values, non-volatile setting, solid color
+    return sendCommand(port, createCommand(SSP_CMD_CONFIGURE_BEZEL, data));
 }
 
 function parseResponse(data) {
