@@ -1,5 +1,5 @@
 // nv200Reader.js
-const SerialPort = require('serialport');
+const { SerialPort } = require('serialport'); 
 const { sendDiscordWebhook } = require('./webhook');
 const { getEnableValidatorCommand, getPollCommand } = require('./config/serialUtils');
 const serialConfig = require('./config/serialConfig');

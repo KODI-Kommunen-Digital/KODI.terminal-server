@@ -25,6 +25,8 @@
     "express": "^4.19.2",
     "express-ipfilter": "^1.3.2",
     "helmet": "^7.1.0",
+    "serialport": "^12.0.0",
+    "terminalserver": "file:",
     "utils-heidi": "^0.0.11"
   }
 }
