@@ -4,6 +4,16 @@ const { sendDiscordWebhook } = require('./webhook');
 const { getEnableValidatorCommand, getPollCommand } = require('./config/serialUtils');
 const serialConfig = require('./config/serialConfig');
 
+SerialPort.list().then(ports => {
+    ports.forEach(port => {
+        console.log(`Port: ${port.path}`);
+        console.log(`Manufacturer: ${port.manufacturer}`);
+        console.log('-----------------------------------');
+    });
+}).catch(err => {
+    console.error('Error listing ports:', err);
+});
+
 function start() {
     const port = new SerialPort({ path: serialConfig.port, baudRate: serialConfig.baudRate });
 
