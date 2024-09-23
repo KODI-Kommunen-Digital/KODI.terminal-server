@@ -1,4 +1,3 @@
-// nv200Reader.js
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const crc = require('crc');
@@ -8,13 +7,12 @@ const serialConfig = require('./config/serialConfig');
 const SSP_CMD_SYNC = 0x11;
 const SSP_CMD_ENABLE = 0x0A;
 const SSP_CMD_POLL = 0x07;
-const SSP_CMD_CONFIGURE_BEZEL = 0x54; // New constant for bezel configuration
-
+const SSP_CMD_CONFIGURE_BEZEL = 0x54;
 const SSP_RESP_OK = 0xF0;
 const SSP_EVENT_READ = 0xEF;
 const SSP_EVENT_CREDIT = 0xEE;
 
-let sequence = 0x00;
+let sequence = 0x80;
 
 function start() {
     const port = new SerialPort({ path: serialConfig.port, baudRate: serialConfig.baudRate });
@@ -30,7 +28,7 @@ function start() {
             await sendCommand(port, createCommand(SSP_CMD_ENABLE));
             console.log('NV200 enabled');
 
-            await configureBezel(port, 0, 255, 0); // Configure green bezel
+            await configureBezel(port, 0, 255, 0);
             console.log('Bezel configured to show green light');
 
             // Start polling
@@ -64,12 +62,9 @@ function start() {
 
 function createCommand(command, data = []) {
     const length = data.length + 1;
-    const packetData = [sequence | 0x80, length, command, ...data];
+    const packetData = [0x00, length, command, ...data];
     const crcValue = crc.crc16ccitt(packetData);
     const packet = [0x7F, ...packetData, crcValue & 0xFF, (crcValue >> 8) & 0xFF];
-
-    sequence = sequence ? 0x00 : 0x80;
-
     return Buffer.from(packet);
 }
 
@@ -94,7 +89,6 @@ function configureBezel(port, red, green, blue) {
 function parseResponse(data) {
     const response = Buffer.from(data, 'hex');
     const events = [];
-
     for (let i = 3; i < response.length - 2; i++) {
         switch (response[i]) {
             case SSP_EVENT_READ:
@@ -105,7 +99,6 @@ function parseResponse(data) {
                 break;
         }
     }
-
     return events;
 }
 
