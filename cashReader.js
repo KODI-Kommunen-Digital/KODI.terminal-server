@@ -19,10 +19,12 @@ function start() {
         console.log(`Serial Port Opened on ${serialConfig.port} at ${serialConfig.baudRate} baud rate`);
         
         try {
-            await sendCommand(port, createCommand(SSP_CMD_SYNC));
+            // Send Sync command (17)
+            await sendExactCommand(port, Buffer.from([0x7F, 0x80, 0x01, 0x11, 0x65, 0x82]));
             console.log('Sync command sent');
             
-            await sendCommand(port, createCommand(SSP_CMD_ENABLE));
+            // Send Enable command (10)
+            await sendExactCommand(port, Buffer.from([0x7F, 0x00, 0x01, 0x0A, 0x3C, 0x08]));
             console.log('NV200 enabled');
 
             await configureBezel(port, 0, 255, 0);
@@ -57,21 +59,20 @@ function start() {
     });
 }
 
-function createCommand(command) {
-    const packet = [0x00, 0x01, command];
-    let crc = 0xFFFF;
-    for (let byte of packet) {
-        crc ^= byte;
-        for (let i = 0; i < 8; i++) {
-            if (crc & 0x0001) {
-                crc = (crc >> 1) ^ 0x8408;
+function sendExactCommand(port, command) {
+    return new Promise((resolve, reject) => {
+        console.log('TX:', command.toString('hex').toUpperCase().match(/.{1,2}/g).join(' '));
+        port.write(command, (err) => {
+            if (err) {
+                reject(new Error(`Error on write: ${err.message}`));
             } else {
-                crc = crc >> 1;
+                port.once('data', (response) => {
+                    console.log('RX:', response.toString('hex').toUpperCase().match(/.{1,2}/g).join(' '));
+                    resolve(response);
+                });
             }
-        }
-    }
-    crc = ~crc;
-    return Buffer.from([0x7F, ...packet, crc & 0xFF, (crc >> 8) & 0xFF]);
+        });
+    });
 }
 
 function sendCommand(port, command) {
