@@ -67,9 +67,9 @@ app.all("*", (req, res, next) => {
 });
 
 
-nfcReader.start();
+//nfcReader.start();
 cashReader.start()
-barcodeScanner.start();
+//barcodeScanner.start();
 
 const port = process.env.PORT || 3050
 app.listen(port, () => {
