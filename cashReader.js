@@ -12,8 +12,6 @@ const SSP_RESP_OK = 0xF0;
 const SSP_EVENT_READ = 0xEF;
 const SSP_EVENT_CREDIT = 0xEE;
 
-let sequence = 0x80;
-
 function start() {
     const port = new SerialPort({ path: serialConfig.port, baudRate: serialConfig.baudRate });
     const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
@@ -25,8 +23,8 @@ function start() {
             await sendCommand(port, createCommand(SSP_CMD_SYNC));
             console.log('Sync command sent');
             
-            await sendCommand(port, createCommand(SSP_CMD_ENABLE));
-            console.log('NV200 enabled');
+            const enableResponse = await sendCommand(port, createCommand(SSP_CMD_ENABLE));
+            handleResponse(enableResponse);
 
             await configureBezel(port, 0, 255, 0);
             console.log('Bezel configured to show green light');
@@ -60,25 +58,35 @@ function start() {
     });
 }
 
-function createCommand(command, data = []) {
-    const length = data.length + 1;
-    const packetData = [0x00, length, command, ...data];
-    const crcValue = crc.crc16ccitt(packetData);
-    const packet = [0x7F, ...packetData, crcValue & 0xFF, (crcValue >> 8) & 0xFF];
+function createCommand(command) {
+    const packet = [0x7F, 0x00, 0x01, command];
+    const crcValue = crc.crc16ccitt(packet.slice(1));
+    packet.push(crcValue & 0xFF, (crcValue >> 8) & 0xFF);
     return Buffer.from(packet);
 }
 
 function sendCommand(port, command) {
     return new Promise((resolve, reject) => {
+        console.log('TX:', command.toString('hex').toUpperCase().match(/.{1,2}/g).join(' '));
         port.write(command, (err) => {
             if (err) {
                 reject(new Error(`Error on write: ${err.message}`));
             } else {
-                console.log('Command sent to NV200:', command.toString('hex'));
-                resolve();
+                port.once('data', (response) => {
+                    console.log('RX:', response.toString('hex').toUpperCase().match(/.{1,2}/g).join(' '));
+                    resolve(response);
+                });
             }
         });
     });
+}
+
+function handleResponse(response) {
+    if (response[3] === SSP_RESP_OK) {
+        console.log('NV200 enabled successfully');
+    } else {
+        console.error('Failed to enable NV200');
+    }
 }
 
 function configureBezel(port, red, green, blue) {
