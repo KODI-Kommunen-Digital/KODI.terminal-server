@@ -1,6 +1,5 @@
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
-const crc = require('crc');
 const { sendDiscordWebhook } = require('./webhook');
 const serialConfig = require('./config/serialConfig');
 
@@ -23,8 +22,8 @@ function start() {
             await sendCommand(port, createCommand(SSP_CMD_SYNC));
             console.log('Sync command sent');
             
-            const enableResponse = await sendCommand(port, createCommand(SSP_CMD_ENABLE));
-            handleResponse(enableResponse);
+            await sendCommand(port, createCommand(SSP_CMD_ENABLE));
+            console.log('NV200 enabled');
 
             await configureBezel(port, 0, 255, 0);
             console.log('Bezel configured to show green light');
@@ -59,10 +58,20 @@ function start() {
 }
 
 function createCommand(command) {
-    const packet = [0x7F, 0x00, 0x01, command];
-    const crcValue = crc.crc16ccitt(packet.slice(1));
-    packet.push(crcValue & 0xFF, (crcValue >> 8) & 0xFF);
-    return Buffer.from(packet);
+    const packet = [0x00, 0x01, command];
+    let crc = 0xFFFF;
+    for (let byte of packet) {
+        crc ^= byte;
+        for (let i = 0; i < 8; i++) {
+            if (crc & 0x0001) {
+                crc = (crc >> 1) ^ 0x8408;
+            } else {
+                crc = crc >> 1;
+            }
+        }
+    }
+    crc = ~crc;
+    return Buffer.from([0x7F, ...packet, crc & 0xFF, (crc >> 8) & 0xFF]);
 }
 
 function sendCommand(port, command) {
@@ -81,17 +90,23 @@ function sendCommand(port, command) {
     });
 }
 
-function handleResponse(response) {
-    if (response[3] === SSP_RESP_OK) {
-        console.log('NV200 enabled successfully');
-    } else {
-        console.error('Failed to enable NV200');
-    }
-}
-
 function configureBezel(port, red, green, blue) {
     const data = [red, green, blue, 1, 0]; // RGB values, non-volatile setting, solid color
-    return sendCommand(port, createCommand(SSP_CMD_CONFIGURE_BEZEL, data));
+    const packet = [0x00, data.length + 1, SSP_CMD_CONFIGURE_BEZEL, ...data];
+    let crc = 0xFFFF;
+    for (let byte of packet) {
+        crc ^= byte;
+        for (let i = 0; i < 8; i++) {
+            if (crc & 0x0001) {
+                crc = (crc >> 1) ^ 0x8408;
+            } else {
+                crc = crc >> 1;
+            }
+        }
+    }
+    crc = ~crc;
+    const command = Buffer.from([0x7F, ...packet, crc & 0xFF, (crc >> 8) & 0xFF]);
+    return sendCommand(port, command);
 }
 
 function parseResponse(data) {
