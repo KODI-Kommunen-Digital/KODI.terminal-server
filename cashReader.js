@@ -27,12 +27,9 @@ function start() {
             await sendExactCommand(port, Buffer.from([0x7F, 0x00, 0x01, 0x0A, 0x3C, 0x08]));
             console.log('NV200 enabled');
 
-            await configureBezel(port, 0, 255, 0);
-            console.log('Bezel configured to show green light');
-
             // Start polling
             setInterval(() => {
-                sendCommand(port, createCommand(SSP_CMD_POLL))
+                sendExactCommand(port, Buffer.from([0x7F, 0x80, 0x01, 0x07, 0x12, 0x02]))
                     .catch(error => console.error('Error during polling:', error));
             }, 200);
         } catch (error) {
@@ -112,14 +109,19 @@ function configureBezel(port, red, green, blue) {
 
 function parseResponse(data) {
     const response = Buffer.from(data, 'hex');
+    console.log(response)
     const events = [];
     for (let i = 3; i < response.length - 2; i++) {
+        console.log(response[i])
         switch (response[i]) {
             case SSP_EVENT_READ:
                 events.push({ type: 'reading', channel: response[++i] });
                 break;
             case SSP_EVENT_CREDIT:
                 events.push({ type: 'credited', channel: response[++i] });
+                break;
+            default:
+                events.push({ type: 'uknown', channel: response[++i] });
                 break;
         }
     }
