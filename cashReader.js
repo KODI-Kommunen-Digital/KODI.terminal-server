@@ -1,131 +1,88 @@
-const { SerialPort } = require('serialport');
-const { ReadlineParser } = require('@serialport/parser-readline');
-const { sendDiscordWebhook } = require('./webhook');
+// NV200 Cash Machine Interface
 const serialConfig = require('./config/serialConfig');
+const sspLib = require('encrypted-smiley-secure-protocol');
 
-const SSP_CMD_SYNC = 0x11;
-const SSP_CMD_ENABLE = 0x0A;
-const SSP_CMD_POLL = 0x07;
-const SSP_CMD_CONFIGURE_BEZEL = 0x54;
-const SSP_RESP_OK = 0xF0;
-const SSP_EVENT_READ = 0xEF;
-const SSP_EVENT_CREDIT = 0xEE;
+class NV200CashMachine {
+    constructor(port = 'COM1', baudRate = 9600, debug = false) {
+        this.eSSP = new sspLib({
+            id: 0x00,       // Device ID (default 0)
+            fixedKey: '0123456701234567', // Encryption key
+            timeout: 3000,  // Command response timeout
+            debug,          // Enable debug logs
+        });
+        this.portOptions = { baudRate }; // Serial port settings
+        this.port = port;
+    }
 
-function start() {
-    const port = new SerialPort({ path: serialConfig.port, baudRate: serialConfig.baudRate });
-    const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
-
-    port.on('open', async () => {
-        console.log(`Serial Port Opened on ${serialConfig.port} at ${serialConfig.baudRate} baud rate`);
-        
+    async initialize() {
         try {
-            // Send Sync command (17)
-            await sendExactCommand(port, Buffer.from([0x7F, 0x80, 0x01, 0x11, 0x65, 0x82]));
-            console.log('Sync command sent');
+            // Open the communication port
+            await this.eSSP.open(this.port, this.portOptions);
+            console.log('NV200 connected on', this.port);
             
-            // Send Enable command (10)
-            await sendExactCommand(port, Buffer.from([0x7F, 0x00, 0x01, 0x0A, 0x3C, 0x08]));
-            console.log('NV200 enabled');
-
-            // Start polling
-            setInterval(() => {
-                sendExactCommand(port, Buffer.from([0x7F, 0x80, 0x01, 0x07, 0x12, 0x02]))
-                    .catch(error => console.error('Error during polling:', error));
-            }, 200);
+            // Initialize encryption (eSSP requirement)
+            await this.eSSP.initEncryption();
+            console.log('Encryption initialized.');
         } catch (error) {
-            console.error('Error during initialization:', error);
-        }
-    });
-
-    parser.on('data', (data) => {
-        console.log('Data received from NV200:', data);
-        
-        const events = parseResponse(data);
-        events.forEach(event => {
-            if (event.type === 'credited') {
-                console.log(`Cash inserted: Channel ${event.channel}`);
-                sendDiscordWebhook({ data: `Cash inserted: Channel ${event.channel}` }, 'nv200')
-                    .then(() => console.log('Discord webhook sent successfully'))
-                    .catch(error => console.error('Error sending Discord webhook:', error));
-            }
-        });
-    });
-
-    port.on('error', (err) => {
-        console.error('Serial Port Error:', err.message);
-    });
-}
-
-function sendExactCommand(port, command) {
-    return new Promise((resolve, reject) => {
-        console.log('TX:', command.toString('hex').toUpperCase().match(/.{1,2}/g).join(' '));
-        port.write(command, (err) => {
-            if (err) {
-                reject(new Error(`Error on write: ${err.message}`));
-            } else {
-                port.once('data', (response) => {
-                    console.log('RX:', response.toString('hex').toUpperCase().match(/.{1,2}/g).join(' '));
-                    resolve(response);
-                });
-            }
-        });
-    });
-}
-
-function sendCommand(port, command) {
-    return new Promise((resolve, reject) => {
-        console.log('TX:', command.toString('hex').toUpperCase().match(/.{1,2}/g).join(' '));
-        port.write(command, (err) => {
-            if (err) {
-                reject(new Error(`Error on write: ${err.message}`));
-            } else {
-                port.once('data', (response) => {
-                    console.log('RX:', response.toString('hex').toUpperCase().match(/.{1,2}/g).join(' '));
-                    resolve(response);
-                });
-            }
-        });
-    });
-}
-
-function configureBezel(port, red, green, blue) {
-    const data = [red, green, blue, 1, 0]; // RGB values, non-volatile setting, solid color
-    const packet = [0x00, data.length + 1, SSP_CMD_CONFIGURE_BEZEL, ...data];
-    let crc = 0xFFFF;
-    for (let byte of packet) {
-        crc ^= byte;
-        for (let i = 0; i < 8; i++) {
-            if (crc & 0x0001) {
-                crc = (crc >> 1) ^ 0x8408;
-            } else {
-                crc = crc >> 1;
-            }
+            console.error('Initialization error:', error);
         }
     }
-    crc = ~crc;
-    const command = Buffer.from([0x7F, ...packet, crc & 0xFF, (crc >> 8) & 0xFF]);
-    return sendCommand(port, command);
-}
 
-function parseResponse(data) {
-    const response = Buffer.from(data, 'hex');
-    console.log(response)
-    const events = [];
-    for (let i = 3; i < response.length - 2; i++) {
-        console.log(response[i])
-        switch (response[i]) {
-            case SSP_EVENT_READ:
-                events.push({ type: 'reading', channel: response[++i] });
-                break;
-            case SSP_EVENT_CREDIT:
-                events.push({ type: 'credited', channel: response[++i] });
-                break;
-            default:
-                events.push({ type: 'uknown', channel: response[++i] });
-                break;
+    async getSerialNumber() {
+        try {
+            const result = await this.eSSP.command('GET_SERIAL_NUMBER');
+            console.log('NV200 Serial number:', result.info.serial_number);
+        } catch (error) {
+            console.error('Failed to get serial number:', error);
         }
     }
-    return events;
+
+    async pollDevice() {
+        try {
+            const pollResult = await this.eSSP.command('POLL');
+            console.log('Polling result:', pollResult);
+        } catch (error) {
+            console.error('Polling error:', error);
+        }
+    }
+
+    async payout(amount) {
+        try {
+            const payoutResult = await this.eSSP.command('PAYOUT_AMOUNT', { amount });
+            console.log(`Payout result: ${payoutResult}`);
+        } catch (error) {
+            console.error('Payout error:', error);
+        }
+    }
+
+    async emptyCashbox() {
+        try {
+            const emptyResult = await this.eSSP.command('EMPTY_ALL');
+            console.log('Cashbox emptied:', emptyResult);
+        } catch (error) {
+            console.error('Empty cashbox error:', error);
+        }
+    }
+
+    async start() {
+        await this.initialize();
+        this.pollInterval = setInterval(async () => {
+            await this.pollDevice();
+        }, 1000); // Poll device every second
+    }
+
+    async stop() {
+        clearInterval(this.pollInterval);
+        await this.eSSP.close();
+        console.log('NV200 stopped.');
+    }
 }
 
-module.exports = { start };
+// Export the start function
+module.exports = {
+    start: async function() {
+        const nv200 = new NV200CashMachine(serialConfig.port, serialConfig.baudRate, true); // Replace COM1 with your serial port if different
+        await nv200.start();
+        return nv200;
+    }
+};
