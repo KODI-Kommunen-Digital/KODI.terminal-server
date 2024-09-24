@@ -8,19 +8,24 @@ async function sendDiscordWebhook(data, type) {
     let payloadData;
 
     if (type === 'nfc') {
-        const embedTitle = 'NFC Card Scanned'; // Local variable 'embedTitle' wasn't declared
-        const fields = [{ name: 'UID', value: data.uid },
-                        { name: 'Block Data', value: data.blockData }];
-        payloadData = { embeds: [{ title: embedTitle, fields: fields }] }; // Added 'payloadData' definition for 'nfc' type
+        payloadData = {
+            uid: data.uid,
+            blockData: data.blockData
+        }; 
     } else if (type === 'barcode') {
-        payloadData = { value: data.barcodeData };
+        payloadData = {
+            value: data.barcodeData
+        };
     } else {
-        throw new Error('Unknown notification type'); // Changed from 'return reject(new Error(...))' to 'throw'
+        throw new Error('Unknown notification type');
     }
 
     const payload = JSON.stringify(payloadData);
     try {
-        let response = await axios.post(webhookUrl, payload, { headers: { 'Content-Type': 'application/json' } });
+        let response = await axios.post(webhookUrl, 
+            { payload }, 
+            { headers: { 'Content-Type': 'application/json' } }
+        );
         console.log(response);
     }
     catch (error) {
