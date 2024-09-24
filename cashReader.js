@@ -8,7 +8,8 @@ class NV200CashMachine {
             id: 0x00,       // Device ID (default 0)
             fixedKey: '0123456701234567', // Encryption key
             timeout: 3000,  // Command response timeout
-            debug,          // Enable debug logs
+            debug, 
+            encryptAllCommand: false         // Enable debug logs
         });
         this.portOptions = { baudRate }; // Serial port settings
         this.port = port;
