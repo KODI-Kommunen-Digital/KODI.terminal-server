@@ -22,7 +22,7 @@ class NV200CashMachine {
             console.log('NV200 connected on', this.port);
             
             // Initialize encryption (eSSP requirement)
-            await this.eSSP.initEncryption();
+            //await this.eSSP.initEncryption();
             console.log('Encryption initialized.');
         } catch (error) {
             console.error('Initialization error:', error);
