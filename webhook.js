@@ -1,8 +1,8 @@
 // discordWebhook.js
 const https = require('https');
 
-const webhookUrl = "https://discord.com/api/webhooks/1225679388561903637/oQWCgz5YU6d1NLV3Czenc_DaBjmFoqslEkUvww4TZuQxOdL8PU-e03iPk-nGrxHq-aHs"
-
+// const webhookUrl = "https://discord.com/api/webhooks/1225679388561903637/oQWCgz5YU6d1NLV3Czenc_DaBjmFoqslEkUvww4TZuQxOdL8PU-e03iPk-nGrxHq-aHs"
+const localWeb = "wss://localhost:3001/ws"
 function sendDiscordWebhook(data, type) {
     return new Promise((resolve, reject) => {
         let embedTitle, fields;
