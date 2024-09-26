@@ -26,13 +26,29 @@ class NV200CashMachine extends EventEmitter {
             7: '500 EUR'
         };
         this.currentNote = null;
-        this.logFile = path.join(__dirname, 'nv200.log');
+        this.logDir = path.join(__dirname, 'logs/cashMachine');
+        this.ensureLogDirectory();
+    }
+
+    ensureLogDirectory() {
+        if (!fs.existsSync(this.logDir)) {
+            fs.mkdirSync(this.logDir, { recursive: true });
+        }
+    }
+
+    getLogFilename() {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = now.toLocaleString('default', { month: 'short' }).toUpperCase();
+        const year = now.getFullYear();
+        return path.join(this.logDir, `${day}${month}${year}.log`);
     }
 
     log(message) {
         const timestamp = new Date().toISOString();
         const logMessage = `${timestamp} - ${message}\n`;
-        fs.appendFile(this.logFile, logMessage, (err) => {
+        const logFile = this.getLogFilename();
+        fs.appendFile(logFile, logMessage, (err) => {
             if (err) console.error('Error writing to log file:', err);
         });
         console.log(message);
