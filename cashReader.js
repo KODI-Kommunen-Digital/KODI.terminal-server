@@ -1,6 +1,8 @@
 const EventEmitter = require('events');
 const serialConfig = require('./config/serialConfig');
 const sspLib = require('encrypted-smiley-secure-protocol');
+const fs = require('fs');
+const path = require('path');
 
 class NV200CashMachine extends EventEmitter {
     constructor(port = 'COM8', baudRate = 9600, debug = false) {
@@ -24,19 +26,27 @@ class NV200CashMachine extends EventEmitter {
             7: '500 EUR'
         };
         this.currentNote = null;
+        this.logFile = path.join(__dirname, 'nv200.log');
+    }
+
+    log(message) {
+        const timestamp = new Date().toISOString();
+        const logMessage = `${timestamp} - ${message}\n`;
+        fs.appendFile(this.logFile, logMessage, (err) => {
+            if (err) console.error('Error writing to log file:', err);
+        });
+        console.log(message);
     }
 
     async initialize() {
         try {
-            // Open the communication port
             await this.eSSP.open(this.port, this.portOptions);
-            console.log('NV200 connected on', this.port);
+            this.log(`NV200 connected on ${this.port}`);
             
-            // Initialize encryption (eSSP requirement)
             //await this.eSSP.initEncryption();
-            console.log('Encryption initialized.');
+            this.log('Encryption initialized.');
         } catch (error) {
-            console.error('Initialization error:', error);
+            this.log(`Initialization error: ${error.message}`);
             throw error;
         }
     }
@@ -44,9 +54,9 @@ class NV200CashMachine extends EventEmitter {
     async enableDevice() {
         try {
             const enableResult = await this.eSSP.command('ENABLE');
-            console.log('Enable result:', enableResult);
+            this.log(`Enable result: ${JSON.stringify(enableResult)}`);
         } catch (error) {
-            console.error('Enable error:', error);
+            this.log(`Enable error: ${error.message}`);
             throw error;
         }
     }
@@ -54,10 +64,10 @@ class NV200CashMachine extends EventEmitter {
     async getSerialNumber() {
         try {
             const result = await this.eSSP.command('GET_SERIAL_NUMBER');
-            console.log('NV200 Serial number:', result.info.serial_number);
+            this.log(`NV200 Serial number: ${result.info.serial_number}`);
             return result.info.serial_number;
         } catch (error) {
-            console.error('Failed to get serial number:', error);
+            this.log(`Failed to get serial number: ${error.message}`);
             throw error;
         }
     }
@@ -65,7 +75,7 @@ class NV200CashMachine extends EventEmitter {
     async pollDevice() {
         try {
             const pollResult = await this.eSSP.command('POLL');
-            console.log('Polling result:', pollResult);
+            // We're not logging poll results to avoid excessive logging
             
             if (pollResult.info) {
                 if (Array.isArray(pollResult.info)) {
@@ -73,15 +83,13 @@ class NV200CashMachine extends EventEmitter {
                 } else if (typeof pollResult.info === 'object') {
                     this.handlePollInfo(pollResult.info);
                 } else {
-                    console.log('Unexpected info structure:', pollResult.info);
+                    this.log(`Unexpected info structure: ${JSON.stringify(pollResult.info)}`);
                 }
-            } else {
-                console.log('No info in poll result');
             }
             
             return pollResult;
         } catch (error) {
-            console.error('Polling error:', error);
+            this.log(`Polling error: ${error.message}`);
             throw error;
         }
     }
@@ -89,10 +97,10 @@ class NV200CashMachine extends EventEmitter {
     async payout(amount) {
         try {
             const payoutResult = await this.eSSP.command('PAYOUT_AMOUNT', { amount });
-            console.log(`Payout result: ${payoutResult}`);
+            this.log(`Payout result: ${JSON.stringify(payoutResult)}`);
             return payoutResult;
         } catch (error) {
-            console.error('Payout error:', error);
+            this.log(`Payout error: ${error.message}`);
             throw error;
         }
     }
@@ -100,175 +108,153 @@ class NV200CashMachine extends EventEmitter {
     async emptyCashbox() {
         try {
             const emptyResult = await this.eSSP.command('EMPTY_ALL');
-            console.log('Cashbox emptied:', emptyResult);
+            this.log(`Cashbox emptied: ${JSON.stringify(emptyResult)}`);
             return emptyResult;
         } catch (error) {
-            console.error('Empty cashbox error:', error);
+            this.log(`Empty cashbox error: ${error.message}`);
             throw error;
         }
     }
 
     async start() {
         await this.initialize();
-        await this.enableDevice();  // Attempt to enable the device after initialization
+        await this.enableDevice();
         this.pollInterval = setInterval(async () => {
             try {
                 await this.pollDevice();
             } catch (error) {
-                console.error('Error during polling:', error);
+                this.log(`Error during polling: ${error.message}`);
             }
-        }, 1000); // Poll device every second
+        }, 1000);
     }
 
     async stop() {
         clearInterval(this.pollInterval);
         try {
             await this.eSSP.close();
-            console.log('NV200 stopped.');
+            this.log('NV200 stopped.');
         } catch (error) {
-            console.error('Error stopping NV200:', error);
+            this.log(`Error stopping NV200: ${error.message}`);
         }
     }
 
     handlePollInfo(info) {
-        console.log('Handling info:', info.name);
+        if (!info || !info.name) {
+            // Skip logging for undefined or empty info
+            return;
+        }
+        this.log(`Handling info: ${info.name}`);
         switch (info.name) {
-            // Slave Reset Events
             case 'SLAVE_RESET':
-                console.log('The device has reset itself.');
+                this.log('The device has reset itself.');
                 this.emit('deviceReset');
                 break;
-
-            // Disabled Events
             case 'DISABLED':
-                console.log('Device is disabled. Attempting to enable...');
+                this.log('Device is disabled. Attempting to enable...');
                 this.enableDevice();
                 break;
-
-            // Note Events
             case 'READ_NOTE':
                 this.currentNote = info.channel;
-                console.log(`Note being read: Channel ${this.currentNote}`);
+                this.log(`Note being read: Channel ${this.currentNote}`);
                 break;
             case 'CREDIT_NOTE':
                 const denomination = this.euroDenominations[info.channel] || 'Unknown';
-                console.log(`Bill inserted and credited: ${denomination}`);
+                this.log(`Bill inserted and credited: ${denomination}`);
                 this.emit('billInserted', { denomination, channel: info.channel });
                 this.currentNote = null;
                 break;
             case 'NOTE_REJECTING':
-                console.log('Note is being rejected');
+                this.log('Note is being rejected');
                 break;
             case 'NOTE_REJECTED':
-                console.log('Note has been rejected');
+                this.log('Note has been rejected');
                 this.emit('noteRejected');
                 break;
             case 'NOTE_STACKING':
-                console.log('Note is being stacked');
+                this.log('Note is being stacked');
                 break;
             case 'NOTE_STACKED':
-                console.log('Note has been stacked');
+                this.log('Note has been stacked');
                 break;
-
-            // Fraud Events
             case 'FRAUD_ATTEMPT':
-                console.log('Fraud attempt detected');
+                this.log('Fraud attempt detected');
                 this.emit('fraudAttempt');
                 break;
             case 'STACKER_FULL':
-                console.log('Stacker is full');
+                this.log('Stacker is full');
                 this.emit('stackerFull');
                 break;
-
-            // Cash Box Events
             case 'CASH_BOX_REMOVED':
-                console.log('Cash box has been removed');
+                this.log('Cash box has been removed');
                 this.emit('cashBoxRemoved');
                 break;
             case 'CASH_BOX_REPLACED':
-                console.log('Cash box has been replaced');
+                this.log('Cash box has been replaced');
                 this.emit('cashBoxReplaced');
                 break;
-
-            // Payout Events
             case 'NOTE_STORED_IN_PAYOUT':
-                console.log('Note stored in payout device');
+                this.log('Note stored in payout device');
                 break;
             case 'NOTE_DISPENSING':
-                console.log('Note is being dispensed');
+                this.log('Note is being dispensed');
                 break;
             case 'NOTE_DISPENSED':
-                console.log('Note has been dispensed');
+                this.log('Note has been dispensed');
                 this.emit('noteDispensed');
                 break;
             case 'NOTE_TRANSFERRED_TO_STACKER':
-                console.log('Note transferred to stacker');
+                this.log('Note transferred to stacker');
                 break;
-
-            // Smart Payout Events
             case 'SMART_EMPTYING':
-                console.log('Smart emptying in progress');
+                this.log('Smart emptying in progress');
                 break;
             case 'SMART_EMPTIED':
-                console.log('Smart emptying completed');
+                this.log('Smart emptying completed');
                 this.emit('smartEmptied');
                 break;
-
-            // Channel Events
             case 'CHANNEL_DISABLE':
-                console.log(`Channel ${info.channel} disabled`);
+                this.log(`Channel ${info.channel} disabled`);
                 break;
             case 'CHANNEL_ENABLE':
-                console.log(`Channel ${info.channel} enabled`);
+                this.log(`Channel ${info.channel} enabled`);
                 break;
             case 'INITIALISING':
-                console.log('Device is initializing');
+                this.log('Device is initializing');
                 break;
-
-            // Coin Mechanism Events (if applicable)
             case 'COIN_MECH_ERROR':
-                console.log('Coin mechanism error');
+                this.log('Coin mechanism error');
                 this.emit('coinMechError');
                 break;
             case 'COIN_MECH_JAM':
-                console.log('Coin mechanism jam');
+                this.log('Coin mechanism jam');
                 this.emit('coinMechJam');
                 break;
-
-            // Barcode Events (if applicable)
             case 'BARCODE_TICKET_VALIDATED':
-                console.log('Barcode ticket validated');
+                this.log('Barcode ticket validated');
                 this.emit('barcodeValidated', info.data);
                 break;
             case 'BARCODE_TICKET_ACKNOWLEDGE':
-                console.log('Barcode ticket acknowledged');
+                this.log('Barcode ticket acknowledged');
                 break;
-
-            // Generic Events
             case 'SAFE_JAM':
-                console.log('Safe jam detected');
+                this.log('Safe jam detected');
                 this.emit('safeJam');
                 break;
             case 'UNSAFE_JAM':
-                console.log('Unsafe jam detected');
+                this.log('Unsafe jam detected');
                 this.emit('unsafeJam');
                 break;
             case 'ERROR':
-                console.log('Generic error occurred');
+                this.log(`Generic error occurred: ${JSON.stringify(info.data)}`);
                 this.emit('error', info.data);
                 break;
-
             default:
-                console.log(`Unhandled info: ${info.name}`);
+                this.log(`Unhandled info: ${info.name}`);
                 this.emit('unknownEvent', info);
         }
     }
-    
-        // ... (rest of the class remains the same)
-    }
 }
 
-// Export the start function
 module.exports = {
     start: async function() {
         const nv200 = new NV200CashMachine(serialConfig.port, serialConfig.baudRate, true);
