@@ -126,8 +126,6 @@ class NV200CashMachine extends EventEmitter {
         try {
             await this.eSSP.open(this.port, this.portOptions);
             this.log(`NV200 connected on ${this.port}`);
-            
-            this.log('Encryption initialized.');
         } catch (error) {
             this.log(`Initialization error: ${error.message}`);
             throw error;
@@ -220,7 +218,7 @@ class NV200CashMachine extends EventEmitter {
         }
     }
 
-    handlePollInfo2(info) {
+    handlePollInfo(info) {
         if (!info || !info.name) {
             // Skip logging for undefined or empty info
             return;
@@ -241,7 +239,7 @@ class NV200CashMachine extends EventEmitter {
                 break;
             case 'CREDIT_NOTE':
                 const denomination = this.euroDenominations[info.channel] || 'Unknown';
-                this.log(`Bill inserted and credited: ${denomination}`);
+                this.log(`Bill inserted and credited: ${JSON.stringify(denomination)}`);
                 this.emit('billInserted', { denomination, channel: info.channel });
                 this.currentNote = null;
                 break;
@@ -334,14 +332,6 @@ class NV200CashMachine extends EventEmitter {
                 this.log(`Unhandled info: ${info.name}`);
                 this.emit('unknownEvent', info);
         }
-    }
-
-    handlePollInfo(info) {
-        if (!info || !info.name) return; // Skip logging for undefined or empty info
-    
-        this.log(`Handling info: ${info.name}`);
-        
-        // Send webhook without emitting events
         this.sendWebhookForInfo(info);
     }
     
