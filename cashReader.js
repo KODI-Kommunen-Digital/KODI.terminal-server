@@ -363,10 +363,15 @@ class NV200CashMachine extends EventEmitter {
             // Add a short delay to ensure the device is ready
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            const inventory = await this.getNoteInventory();
-            console.log('Current note inventory:');
-            for (const [denomination, route] of Object.entries(inventory)) {
-                console.log(`${denomination}: ${route}`);
+            try {
+                const inventory = await this.getNoteInventory();
+                console.log('Current note inventory:');
+                for (const [denomination, route] of Object.entries(inventory)) {
+                    console.log(`${denomination}: ${route}`);
+                }
+            } catch (inventoryError) {
+                this.log(`Error getting note inventory: ${inventoryError.message}`);
+                console.error('Failed to get note inventory, but continuing with startup');
             }
 
             this.pollInterval = setInterval(async () => {
@@ -383,8 +388,6 @@ class NV200CashMachine extends EventEmitter {
             throw error;
         }
     }
-
-    // ... (other methods remain the same)
 }
 
 module.exports = {
