@@ -1,6 +1,6 @@
 // nfcReader.js
 const pcsclite = require('pcsclite');
-const { sendDiscordWebhook } = require('./webhook');
+const { sendWebhook } = require('./webhook');
 const fs = require('fs');
 
 // Load configuration
@@ -43,10 +43,10 @@ function start() {
                                         const blockData = data.toString('hex');
                                         console.log('Data from card (Block 4):', blockData);
                                         
-                                        // Send Discord webhook notification
-                                        sendDiscordWebhook({ uid, blockData }, 'nfc')
-                                            .then(() => console.log('Discord webhook sent successfully'))
-                                            .catch(error => console.error('Error sending Discord webhook:', error));
+                                        // Send Webhook notification
+                                        sendWebhook({ uid, blockData }, 'nfc')
+                                            .then(() => console.log('Webhook sent successfully'))
+                                            .catch(error => console.error('Error sending Webhook:', error));
                                     }
                                     
                                     // Disconnect after reading

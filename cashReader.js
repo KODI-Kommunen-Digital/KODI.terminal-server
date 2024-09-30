@@ -3,9 +3,10 @@ const serialConfig = require('./config/serialConfig');
 const sspLib = require('encrypted-smiley-secure-protocol');
 const fs = require('fs');
 const path = require('path');
+const { sendWebhook } = require('./webhook');
 
 class NV200CashMachine extends EventEmitter {
-    constructor(port = 'COM8', baudRate = 9600, debug = false) {
+    constructor(port = serialConfig.port, baudRate = serialConfig.baudRate, debug = false) {
         super();
         this.eSSP = new sspLib({
             id: 0x00,
@@ -83,7 +84,6 @@ class NV200CashMachine extends EventEmitter {
             await this.eSSP.open(this.port, this.portOptions);
             this.log(`NV200 connected on ${this.port}`);
             
-            //await this.eSSP.initEncryption();
             this.log('Encryption initialized.');
         } catch (error) {
             this.log(`Initialization error: ${error.message}`);
@@ -115,8 +115,7 @@ class NV200CashMachine extends EventEmitter {
     async pollDevice() {
         try {
             const pollResult = await this.eSSP.command('POLL');
-            // We're not logging poll results to avoid excessive logging
-            
+
             if (pollResult.info) {
                 if (Array.isArray(pollResult.info)) {
                     pollResult.info.forEach(info => this.handlePollInfo(info));
@@ -178,7 +177,7 @@ class NV200CashMachine extends EventEmitter {
         }
     }
 
-    handlePollInfo(info) {
+    handlePollInfo2(info) {
         if (!info || !info.name) {
             // Skip logging for undefined or empty info
             return;
@@ -293,6 +292,26 @@ class NV200CashMachine extends EventEmitter {
                 this.emit('unknownEvent', info);
         }
     }
+
+    handlePollInfo(info) {
+        if (!info || !info.name) return; // Skip logging for undefined or empty info
+    
+        this.log(`Handling info: ${info.name}`);
+        
+        // Send webhook without emitting events
+        this.sendWebhookForInfo(info);
+    }
+    
+    async sendWebhookForInfo(info) {
+        const eventData = { type: info.name, ...info };
+        try {
+            await sendWebhook(eventData, 'cash_reader');
+            this.log(`Webhook sent successfully for event: ${info.name}`);
+        } catch (error) {
+            this.log(`Error sending webhook for event: ${info.name} - ${error.message}`);
+        }
+    }
+    
 }
 
 module.exports = {

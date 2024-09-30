@@ -2,7 +2,7 @@ const axios = require('axios');
 require("dotenv").config();
 
 
-async function sendDiscordWebhook(data, type) {
+async function sendWebhook(data, type) {
     let payloadData;
     let webhookUrl = `http://localhost:${process.env.WEBHOOK_PORT}/publish/${type}?accessToken=${process.env.ACCESS_TOKEN}`;
     console.log(webhookUrl)
@@ -34,4 +34,4 @@ async function sendDiscordWebhook(data, type) {
     }
 }
 
-module.exports = { sendDiscordWebhook };
+module.exports = { sendWebhook };

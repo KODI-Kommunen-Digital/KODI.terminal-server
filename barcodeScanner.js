@@ -1,4 +1,4 @@
-const { sendDiscordWebhook } = require('./webhook');
+const { sendWebhook } = require('./webhook');
 const readline = require('readline');
 
 function start() {
@@ -13,9 +13,9 @@ function start() {
         console.log('Barcode scanned:', input);
         
         // Send Discord webhook notification
-        sendDiscordWebhook({ barcodeData: input }, 'barcode')
-            .then(() => console.log('Discord webhook sent successfully for product scan'))
-            .catch(error => console.error('Error sending Discord webhook for product scan:', error));
+        sendWebhook({ barcodeData: input }, 'barcode')
+            .then(() => console.log('Webhook sent successfully for product scan'))
+            .catch(error => console.error('Error sending webhook for product scan:', error));
     });
 }
 
