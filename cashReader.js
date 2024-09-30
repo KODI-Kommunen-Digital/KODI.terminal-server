@@ -18,15 +18,15 @@ class NV200CashMachine extends EventEmitter {
         this.portOptions = { baudRate };
         this.port = port;
         this.countryCode = countryCode;
-        this.euroDenominations = {
-            500: '5 EUR',
-            1000: '10 EUR',
-            2000: '20 EUR',
-            5000: '50 EUR',
-            10000: '100 EUR',
-            20000: '200 EUR',
-            50000: '500 EUR'
-        };
+        this.euroDenominations = [
+            { value: 500, label: '5 EUR' },
+            { value: 1000, label: '10 EUR' },
+            { value: 2000, label: '20 EUR' },
+            { value: 5000, label: '50 EUR' },
+            { value: 10000, label: '100 EUR' },
+            { value: 20000, label: '200 EUR' },
+            { value: 50000, label: '500 EUR' }
+        ];
         this.currentNote = null;
         this.logDir = path.join(__dirname, 'logs/cashMachine');
         this.ensureLogDirectory();
@@ -386,6 +386,16 @@ class NV200CashMachine extends EventEmitter {
         } catch (error) {
             this.log(`Error during start: ${error.message}`);
             throw error;
+        }
+    }
+
+    async stop() {
+        clearInterval(this.pollInterval);
+        try {
+            await this.eSSP.close();
+            this.log('NV200 stopped.');
+        } catch (error) {
+            this.log(`Error stopping NV200: ${error.message}`);
         }
     }
 }
