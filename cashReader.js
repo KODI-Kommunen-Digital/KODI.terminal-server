@@ -6,7 +6,7 @@ const path = require('path');
 const { sendWebhook } = require('./webhook');
 
 class NV200CashMachine extends EventEmitter {
-    constructor(port = serialConfig.port, baudRate = serialConfig.baudRate, debug = false) {
+    constructor(port = serialConfig.port, baudRate = serialConfig.baudRate, debug = false, countryCode = 'EUR') {
         super();
         this.eSSP = new sspLib({
             id: 0x00,
@@ -17,14 +17,15 @@ class NV200CashMachine extends EventEmitter {
         });
         this.portOptions = { baudRate };
         this.port = port;
+        this.countryCode = countryCode;
         this.euroDenominations = {
-            1: '5 EUR',
-            2: '10 EUR',
-            3: '20 EUR',
-            4: '50 EUR',
-            5: '100 EUR',
-            6: '200 EUR',
-            7: '500 EUR'
+            500: '5 EUR',
+            1000: '10 EUR',
+            2000: '20 EUR',
+            5000: '50 EUR',
+            10000: '100 EUR',
+            20000: '200 EUR',
+            50000: '500 EUR'
         };
         this.currentNote = null;
         this.logDir = path.join(__dirname, 'logs/cashMachine');
@@ -33,17 +34,20 @@ class NV200CashMachine extends EventEmitter {
 
     async getNoteInventory() {
         try {
-            const result = await this.eSSP.command('GET_DENOMINATION_ROUTE');
-            this.log(`Get denomination route result: ${JSON.stringify(result)}`, true);
-
-            if (result.status !== 'OK') {
-                throw new Error(`Failed to get denomination route: ${result.status}`);
-            }
-
             const inventory = {};
-            for (const [channel, route] of Object.entries(result.info)) {
-                const denomination = this.euroDenominations[parseInt(channel)] || `Unknown (Channel ${channel})`;
-                inventory[denomination] = route === 'STACKER' ? 'Available' : 'Not Available';
+            for (const [value, denomination] of Object.entries(this.euroDenominations)) {
+                const result = await this.eSSP.command('GET_DENOMINATION_ROUTE', {
+                    isHopper: false,
+                    value: parseInt(value),
+                    country_code: this.countryCode
+                });
+                this.log(`Get denomination route result for ${denomination}: ${JSON.stringify(result)}`);
+
+                if (result.status !== 'OK') {
+                    throw new Error(`Failed to get denomination route for ${denomination}: ${result.status}`);
+                }
+
+                inventory[denomination] = result.info.route;
             }
 
             this.log(`Current note inventory: ${JSON.stringify(inventory)}`);
@@ -54,6 +58,39 @@ class NV200CashMachine extends EventEmitter {
             throw error;
         }
     }
+
+    async setDenominationRoute(value, route) {
+        try {
+            const result = await this.eSSP.command('SET_DENOMINATION_ROUTE', {
+                route: route, // 'payout' or 'cashbox'
+                value: value,
+                country_code: this.countryCode,
+            });
+            this.log(`Set denomination route result for ${value} ${this.countryCode}: ${JSON.stringify(result)}`);
+
+            if (result.status !== 'OK') {
+                throw new Error(`Failed to set denomination route for ${value} ${this.countryCode}: ${result.status}`);
+            }
+
+            return result;
+        } catch (error) {
+            this.log(`Error setting denomination route: ${error.message}`);
+            throw error;
+        }
+    }
+
+    async floatAmount(amount) {
+        try {
+            const result = await this.eSSP.command('FLOAT_AMOUNT', { amount });
+            this.log(`Float amount result: ${JSON.stringify(result)}`);
+            return result;
+        } catch (error) {
+            this.log(`Error floating amount: ${error.message}`);
+            throw error;
+        }
+    }
+
+
 
     ensureLogDirectory() {
         if (!fs.existsSync(this.logDir)) {
@@ -311,19 +348,44 @@ class NV200CashMachine extends EventEmitter {
             this.log(`Error sending webhook for event: ${info.name} - ${error.message}`);
         }
     }
-    
+
+    async start() {
+        try {
+            await this.initialize();
+            await this.enableDevice();
+            
+            // Add a short delay to ensure the device is ready
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const inventory = await this.getNoteInventory();
+            console.log('Current note inventory:');
+            for (const [denomination, route] of Object.entries(inventory)) {
+                console.log(`${denomination}: ${route}`);
+            }
+
+            this.pollInterval = setInterval(async () => {
+                try {
+                    await this.pollDevice();
+                } catch (error) {
+                    this.log(`Error during polling: ${error.message}`);
+                }
+            }, 1000);
+
+            return this;
+        } catch (error) {
+            this.log(`Error during start: ${error.message}`);
+            throw error;
+        }
+    }
+
+    // ... (other methods remain the same)
 }
 
 module.exports = {
-    start: async function() {
-        const nv200 = new NV200CashMachine(serialConfig.port, serialConfig.baudRate, true);
+    start: async function(port, baudRate, debug = false, countryCode = 'EUR') {
+        const nv200 = new NV200CashMachine(port, baudRate, debug, countryCode);
         try {
             await nv200.start();
-            const inventory = await nv200.getNoteInventory();
-            console.log('Current note inventory:');
-            for (const [denomination, count] of Object.entries(inventory)) {
-                console.log(`${denomination}: ${count}`);
-            }
             return nv200;
         } catch (error) {
             console.error('Failed to start NV200:', error);
