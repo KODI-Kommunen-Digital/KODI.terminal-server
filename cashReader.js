@@ -30,6 +30,30 @@ class NV200CashMachine extends EventEmitter {
         this.ensureLogDirectory();
     }
 
+    async getNoteInventory() {
+        try {
+            const result = await this.eSSP.command('GET_DENOMINATION_ROUTE');
+            this.log(`Get denomination route result: ${JSON.stringify(result)}`, true);
+
+            if (result.status !== 'OK') {
+                throw new Error(`Failed to get denomination route: ${result.status}`);
+            }
+
+            const inventory = {};
+            for (const [channel, route] of Object.entries(result.info)) {
+                const denomination = this.euroDenominations[parseInt(channel)] || `Unknown (Channel ${channel})`;
+                inventory[denomination] = route === 'STACKER' ? 'Available' : 'Not Available';
+            }
+
+            this.log(`Current note inventory: ${JSON.stringify(inventory)}`);
+            return inventory;
+
+        } catch (error) {
+            this.log(`Error getting note inventory: ${error.message}`);
+            throw error;
+        }
+    }
+
     ensureLogDirectory() {
         if (!fs.existsSync(this.logDir)) {
             fs.mkdirSync(this.logDir, { recursive: true });
@@ -276,6 +300,11 @@ module.exports = {
         const nv200 = new NV200CashMachine(serialConfig.port, serialConfig.baudRate, true);
         try {
             await nv200.start();
+            const inventory = await nv200.getNoteInventory();
+            console.log('Current note inventory:');
+            for (const [denomination, count] of Object.entries(inventory)) {
+                console.log(`${denomination}: ${count}`);
+            }
             return nv200;
         } catch (error) {
             console.error('Failed to start NV200:', error);

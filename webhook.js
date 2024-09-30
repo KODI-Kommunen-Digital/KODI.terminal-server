@@ -1,11 +1,11 @@
 const axios = require('axios');
 require("dotenv").config();
 
-const webhookUrl = `http://localhost:${process.env.WEBHOOK_PORT}/publish/barcode?accessToken=${process.env.ACCESS_TOKEN}`;
 
 async function sendDiscordWebhook(data, type) {
-    console.log(webhookUrl)
     let payloadData;
+    let webhookUrl = `http://localhost:${process.env.WEBHOOK_PORT}/publish/${type}?accessToken=${process.env.ACCESS_TOKEN}`;
+    console.log(webhookUrl)
 
     if (type === 'nfc') {
         payloadData = {
