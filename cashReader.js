@@ -35,19 +35,25 @@ class NV200CashMachine extends EventEmitter {
     async getNoteInventory() {
         try {
             const inventory = {};
-            for (const [value, denomination] of Object.entries(this.euroDenominations)) {
-                const result = await this.eSSP.command('GET_DENOMINATION_ROUTE', {
-                    isHopper: false,
-                    value: parseInt(value),
-                    country_code: this.countryCode
-                });
-                this.log(`Get denomination route result for ${denomination}: ${JSON.stringify(result)}`);
+            for (const denom of this.euroDenominations) {
+                try {
+                    const result = await this.eSSP.command('GET_DENOMINATION_ROUTE', {
+                        isHopper: false,
+                        value: denom.value,
+                        country_code: this.countryCode
+                    });
+                    this.log(`Get denomination route result for ${denom.label}: ${JSON.stringify(result)}`);
 
-                if (result.status !== 'OK') {
-                    throw new Error(`Failed to get denomination route for ${denomination}: ${result.status}`);
+                    if (result.status === 'OK') {
+                        inventory[denom.label] = result.info.route;
+                    } else {
+                        this.log(`Failed to get denomination route for ${denom.label}: ${result.status}`);
+                        inventory[denom.label] = 'Unknown';
+                    }
+                } catch (error) {
+                    this.log(`Error getting denomination route for ${denom.label}: ${error.message}`);
+                    inventory[denom.label] = 'Error';
                 }
-
-                inventory[denomination] = result.info.route;
             }
 
             this.log(`Current note inventory: ${JSON.stringify(inventory)}`);
