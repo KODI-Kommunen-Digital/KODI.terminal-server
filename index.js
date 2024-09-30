@@ -5,9 +5,8 @@ const cors = require("cors");
 const helmet = require("helmet");
 const ipfilter = require('express-ipfilter').IpFilter
 const IpDeniedError = require('express-ipfilter').IpDeniedError
-const barcodeScanner = require('./barcodeScanner');
-const nfcReader = require('./nfcReader');
-const cashReader = require('./cashReader');
+const barcodeScanner = require('./services/barcodeScanner');
+const nfcReader = require('./services/nfcReader');
 
 
 
@@ -68,7 +67,6 @@ app.all("*", (req, res, next) => {
 
 
 nfcReader.start();
-cashReader.start()
 barcodeScanner.start();
 
 const port = process.env.PORT || 3050
