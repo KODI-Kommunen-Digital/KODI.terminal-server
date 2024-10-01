@@ -293,7 +293,7 @@ class NV200CashMachine extends EventEmitter {
                 this.emit('smartEmptied');
                 break;
             case 'CHANNEL_DISABLE':
-                this.log(`Channel ${info.channel} disabled`);
+                this.log(`Channel disabled: ${info.description} `);
                 break;
             case 'CHANNEL_ENABLE':
                 this.log(`Channel ${info.channel} enabled`);
