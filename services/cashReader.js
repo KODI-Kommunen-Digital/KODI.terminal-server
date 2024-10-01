@@ -338,7 +338,7 @@ class NV200CashMachine extends EventEmitter {
     async sendWebhookForInfo(info) {
         const eventData = { type: info.name, ...info };
         try {
-            await sendWebhook(eventData, 'cash_reader');
+            await sendWebhook(eventData, 'cashreader');
             this.log(`Webhook sent successfully for event: ${info.name}`);
         } catch (error) {
             this.log(`Error sending webhook for event: ${info.name} - ${error.message}`);

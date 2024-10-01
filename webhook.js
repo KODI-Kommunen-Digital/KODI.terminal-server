@@ -16,6 +16,10 @@ async function sendWebhook(data, type) {
         payloadData = {
             value: data.barcodeData
         };
+    } else if (type === 'cashreader') {
+        payloadData = {
+            value: data
+        };
     } else {
         throw new Error('Unknown notification type');
     }
