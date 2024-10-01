@@ -8,6 +8,7 @@ const IpDeniedError = require('express-ipfilter').IpDeniedError
 const barcodeScanner = require('./services/barcodeScanner');
 const nfcReader = require('./services/nfcReader');
 const cashMachineRoutes = require('./routes/cashMachineRoutes');
+const posPayment = require('./routes/posPayment');
 
 
 
@@ -20,6 +21,9 @@ const message = {
 app.use(helmet());
 app.use(bodyParser.json());
 
+const allowlist = ['::ffff:127.0.0.1'];
+
+app.use(ipfilter(allowlist, { mode: 'allow' }))
 app.use((err, req, res, _next) => {
     if (err instanceof IpDeniedError) {
         res.status(401).send("Access Denied")
@@ -36,29 +40,6 @@ app.get("/", (req, res) => {
     res.send(message);
 });
 
-app.get("/startpayment", (req,res) => {
-    const amount = req.query.amount ? req.query.amount : false
-    if(!amount) {
-        res.send(`Amount is not sent`, 400)
-    }
-    if(Number(amount) == NaN || Number(amount) <= 5 || Number(amount) > 100){
-        res.send(`Invalid Amount sent`, 400)
-    }
-    const { spawn } = require('child_process');
-
-    const process = spawn('./Portalum.Zvt.EasyPay.exe', ['--amount', amount]);
-
-    process.on('close', (returnCode) => {
-        console.log(`Process exited with code ${returnCode}`);
-        if(returnCode == 0) {
-            res.send(`Successsssss`)
-        } else {
-            res.send(`Failed with status code ${returnCode}`) 
-        }
-       
-    });
-    
-});
 
 // Catch-all route for handling 404 errors
 app.use((req, res) => {
@@ -75,6 +56,10 @@ app.use((err, req, res, next) => {
         status: 'error',
         message: err.message || 'Internal Server Error'
     });
+})
+app.use(posPayment);
+app.all("*", (req, res, next) => {
+    next(new AppError(`The URL ${req.originalUrl} does not exists`, 404));
 });
 
 
