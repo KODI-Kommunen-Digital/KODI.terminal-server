@@ -20,9 +20,6 @@ const message = {
 app.use(helmet());
 app.use(bodyParser.json());
 
-const allowlist = ['::ffff:192.168.0.103'];
-
-app.use(ipfilter(allowlist, { mode: 'allow' }))
 app.use((err, req, res, _next) => {
     if (err instanceof IpDeniedError) {
         res.status(401).send("Access Denied")
@@ -63,8 +60,21 @@ app.get("/startpayment", (req,res) => {
     
 });
 
-app.all("*", (req, res, next) => {
-    next(new AppError(`The URL ${req.originalUrl} does not exists`, 404));
+// Catch-all route for handling 404 errors
+app.use((req, res) => {
+    res.status(404).json({
+        status: 'error',
+        message: `The URL ${req.originalUrl} does not exist`
+    });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(err.status || 500).json({
+        status: 'error',
+        message: err.message || 'Internal Server Error'
+    });
 });
 
 
