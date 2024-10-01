@@ -5,12 +5,18 @@ const cashReader = require('../services/cashReader');
 let cashMachineInstance = null;
 
 router.post("/start", async (req, res) => {
+    const { userId } = req.body;
+
+    if (!userId) {
+        return res.status(400).send("userId is required");
+    }
+
     if (cashMachineInstance) {
         return res.status(400).send("Cash machine is already running");
     }
     
     try {
-        cashMachineInstance = await cashReader.start();
+        cashMachineInstance = await cashReader.start(userId);
         res.send("Cash machine started successfully");
     } catch (error) {
         console.error("Failed to start cash machine:", error);
@@ -19,12 +25,18 @@ router.post("/start", async (req, res) => {
 });
 
 router.post("/stop", async (req, res) => {
+    const { userId } = req.body;
+
+    if (!userId) {
+        return res.status(400).send("userId is required");
+    }
+
     if (!cashMachineInstance) {
         return res.status(400).send("Cash machine is not running");
     }
     
     try {
-        await cashMachineInstance.stop();
+        await cashMachineInstance.stop(userId);
         cashMachineInstance = null;
         res.send("Cash machine stopped successfully");
     } catch (error) {

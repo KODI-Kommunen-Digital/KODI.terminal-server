@@ -6,7 +6,7 @@ const path = require('path');
 const { sendWebhook } = require('../webhook');
 
 class NV200CashMachine extends EventEmitter {
-    constructor(port = serialConfig.port, baudRate = serialConfig.baudRate, debug = false, countryCode = 'EUR') {
+    constructor(port = serialConfig.port, baudRate = serialConfig.baudRate, debug = false, countryCode = 'EUR', userId = null) {
         super();
         this.eSSP = new sspLib({
             id: 0x00,
@@ -18,6 +18,7 @@ class NV200CashMachine extends EventEmitter {
         this.portOptions = { baudRate };
         this.port = port;
         this.countryCode = countryCode;
+        this.userId = userId;
         this.euroDenominations = [
             { value: 500, label: '5 EUR' },
             { value: 1000, label: '10 EUR' },
@@ -352,17 +353,6 @@ class NV200CashMachine extends EventEmitter {
             
             // Add a short delay to ensure the device is ready
             await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            try {
-                const inventory = await this.getNoteInventory();
-                console.log('Current note inventory:');
-                for (const [denomination, route] of Object.entries(inventory)) {
-                    console.log(`${denomination}: ${route}`);
-                }
-            } catch (inventoryError) {
-                this.log(`Error getting note inventory: ${inventoryError.message}`);
-                console.error('Failed to get note inventory, but continuing with startup');
-            }
 
             this.pollInterval = setInterval(async () => {
                 try {
@@ -372,9 +362,10 @@ class NV200CashMachine extends EventEmitter {
                 }
             }, 1000);
 
+            this.log(`Cash machine started by user: ${this.userId}`);
             return this;
         } catch (error) {
-            this.log(`Error during start: ${error.message}`);
+            this.log(`Error during start by user ${this.userId}: ${error.message}`);
             throw error;
         }
     }
@@ -383,7 +374,7 @@ class NV200CashMachine extends EventEmitter {
         clearInterval(this.pollInterval);
         try {
             await this.eSSP.close();
-            this.log('NV200 stopped.');
+            this.log(`NV200 stopped by user: ${this.userId}`);
         } catch (error) {
             this.log(`Error stopping NV200: ${error.message}`);
         }
