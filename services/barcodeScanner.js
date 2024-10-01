@@ -1,4 +1,4 @@
-const { sendWebhook } = require('./webhook');
+const { sendWebhook } = require('../webhook');
 const readline = require('readline');
 
 function start() {

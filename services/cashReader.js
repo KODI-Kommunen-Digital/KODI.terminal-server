@@ -1,9 +1,9 @@
 const EventEmitter = require('events');
-const serialConfig = require('./config/serialConfig');
+const serialConfig = require('../config/serialConfig');
 const sspLib = require('encrypted-smiley-secure-protocol');
 const fs = require('fs');
 const path = require('path');
-const { sendWebhook } = require('./webhook');
+const { sendWebhook } = require('../webhook');
 
 class NV200CashMachine extends EventEmitter {
     constructor(port = serialConfig.port, baudRate = serialConfig.baudRate, debug = false, countryCode = 'EUR') {

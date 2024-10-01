@@ -7,6 +7,7 @@ const ipfilter = require('express-ipfilter').IpFilter
 const IpDeniedError = require('express-ipfilter').IpDeniedError
 const barcodeScanner = require('./services/barcodeScanner');
 const nfcReader = require('./services/nfcReader');
+const cashMachineRoutes = require('./routes/cashMachineRoutes');
 
 
 
@@ -32,6 +33,7 @@ app.use((err, req, res, _next) => {
 
 app.use(cors())
 // app.use(headers)
+app.use('/cashMachine', cashMachineRoutes);
 
 app.get("/", (req, res) => {
     res.send(message);

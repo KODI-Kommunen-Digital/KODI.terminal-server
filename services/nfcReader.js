@@ -1,6 +1,6 @@
 // nfcReader.js
 const pcsclite = require('pcsclite');
-const { sendWebhook } = require('./webhook');
+const { sendWebhook } = require('../webhook');
 const fs = require('fs');
 
 // Load configuration
