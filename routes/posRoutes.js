@@ -10,19 +10,47 @@ const {StoreCardTransactionEnums} = require("../constants/databaseEnums")
 const router = express.Router();
 
 // Directory for logging
-const logDir = path.join('logs', 'pos_system');
-if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
-}
+// const logDir = path.join('logs', 'pos_system');
+// if (!fs.existsSync(logDir)) {
+//     fs.mkdirSync(logDir, { recursive: true });
+// }
 
 
   
 
 // Helper function to log messages
-function logMessage(message) {
+// function logMessage(message) {
+//     const timestamp = new Date().toISOString();
+//     const logFile = path.join(logDir, `${new Date().toISOString().split('T')[0]}.log`);
+//     fs.appendFileSync(logFile, `${timestamp}: ${message}\n`);
+// }
+
+const logDir = path.join(__dirname, '..', 'logs', 'posSystem');
+
+function getLogFilename() {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = now.toLocaleString('default', { month: 'short' }).toUpperCase();
+    const year = now.getFullYear();
+    return path.join(logDir, `${day}${month}${year}.log`);
+}
+
+function logMessage(message, severity = 'INFO') {
     const timestamp = new Date().toISOString();
-    const logFile = path.join(logDir, `${new Date().toISOString().split('T')[0]}.log`);
-    fs.appendFileSync(logFile, `${timestamp}: ${message}\n`);
+    const logMessage = `${timestamp} - ${severity}: ${message}\n`;
+    const logFile = getLogFilename();
+
+    // Ensure the log directory exists
+    if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+    }
+
+    fs.appendFile(logFile, logMessage, (err) => {
+        if (err) console.error('Error writing to log file:', err);
+    });
+
+    // Log to console as well
+    console.log(logMessage);
 }
 
 // Define the /startpayment endpoint
@@ -31,35 +59,35 @@ router.post("/startpayment", (req, res) => {
 
     const amount = req.body.amount ? req.body.amount : false;
     if (!amount) {
-        logMessage("Error: Amount is not sent");
+        logMessage("Amount is not sent", "ERROR");
         return res.status(400).send("Amount is not sent");
     }
 
     const numAmount = Number(amount);
     if (isNaN(numAmount) || numAmount <= 5 || numAmount > 100) {
-        logMessage(`Error: Invalid amount sent: ${amount}`);
+        logMessage(`Invalid amount sent: ${amount}`, "ERROR");
         return res.status(400).send("Invalid Amount sent");
     }
 
     if (!req.body.cardId ? req.body.cardId : false) {
-        logMessage("Error: CardId is not sent");
+        logMessage("CardId is not sent", "ERROR");
         return res.status(400).send("CardId is not sent");
     }
 
     const cardId = Number(req.body.cardId);
     if (isNaN(cardId)) {
-        logMessage(`Error: Invalid cardId sent: ${cardId}`);
+        logMessage(`Invalid cardId sent: ${cardId}`, "ERROR");
         return res.status(400).send("Invalid cardId sent");
     }
 
 
     if (!req.body.userId ? req.body.userId : false) {
-        logMessage("Error: userId is not sent");
+        logMessage("userId is not sent", "ERROR");
         return res.status(400).send("userId is not sent");
     }
     const userId = Number(req.body.userId);
     if (isNaN(userId)) {
-        logMessage(`Error: Invalid userId sent: ${userId}`);
+        logMessage(`Invalid userId sent: ${userId}`, "ERROR");
         return res.status(400).send("Invalid userId sent");
     }
     logMessage(`Starting payment process for Amount: ${amount}, CardId: ${cardId}, UserId: ${userId}`);
@@ -94,7 +122,7 @@ router.post("/startpayment", (req, res) => {
             logMessage(`API response: ${response.data}`);
             res.send("Success");
         } else {
-            logMessage(`Payment process failed with status code ${returnCode}`);
+            logMessage(`Payment process failed with status code ${returnCode}`, "ERROR");
             res.status(500).send(`Failed with status code ${returnCode}`);
         }
     });
