@@ -59,9 +59,6 @@ app.use((err, req, res, next) => {
     });
 })
 
-app.all("*", (req, res, next) => {
-    next(new AppError(`The URL ${req.originalUrl} does not exists`, 404));
-});
 
 
 nfcReader.start();
