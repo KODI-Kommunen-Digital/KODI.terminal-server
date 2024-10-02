@@ -8,7 +8,7 @@ const IpDeniedError = require('express-ipfilter').IpDeniedError
 const barcodeScanner = require('./services/barcodeScanner');
 const nfcReader = require('./services/nfcReader');
 const cashMachineRoutes = require('./routes/cashMachineRoutes');
-const posPayment = require('./routes/posPayment');
+const posRoutes = require('./routes/posRoutes');
 
 
 
@@ -39,6 +39,7 @@ app.use('/cashMachine', cashMachineRoutes);
 app.get("/", (req, res) => {
     res.send(message);
 });
+app.use(posRoutes);
 
 
 // Catch-all route for handling 404 errors
@@ -57,7 +58,7 @@ app.use((err, req, res, next) => {
         message: err.message || 'Internal Server Error'
     });
 })
-app.use(posPayment);
+
 app.all("*", (req, res, next) => {
     next(new AppError(`The URL ${req.originalUrl} does not exists`, 404));
 });
