@@ -44,12 +44,14 @@ router.post("/stop", async (req, res) => {
         
         // Prepare data for the remote API call
         const apiDomain = process.env.CONTAINER_API;
-        const storeData = encrypt({
+        const storeData = encrypt(
+        JSON.stringify({
             credit: cashMachineResponse.totalAmount,
             cardId: cardId,
             source: StoreCardTransactionEnums.source.cash
 
-        },  process.env.REACT_APP_ENCRYPTION_KEY,
+        }),
+        process.env.REACT_APP_ENCRYPTION_KEY,
         process.env.REACT_APP_ENCRYPTION_IV)
         
         // Make the remote API call
