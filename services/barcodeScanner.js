@@ -9,13 +9,27 @@ function start() {
         output: process.stdout
     });
 
-    rl.on('line', (input) => {
-        console.log('Barcode scanned:', input);
+    let buffer = '';
+    const timeoutDuration = 1000; // milliseconds
+    let timeoutId;
+
+    rl.input.on('data', (chunk) => {
+        buffer += chunk.toString();
         
-        // Send Discord webhook notification
-        sendWebhook({ barcodeData: input }, 'barcode')
-            .then(() => console.log('Webhook sent successfully for product scan'))
-            .catch(error => console.error('Error sending webhook for product scan:', error));
+        clearTimeout(timeoutId);
+        
+        timeoutId = setTimeout(() => {
+            if (buffer.trim()) {
+                console.log('Barcode scanned:', buffer.trim());
+                
+                // Send Discord webhook notification
+                sendWebhook({ barcodeData: buffer.trim() }, 'barcode')
+                    .then(() => console.log('Webhook sent successfully for product scan'))
+                    .catch(error => console.error('Error sending webhook for product scan:', error));
+                
+                buffer = '';
+            }
+        }, timeoutDuration);
     });
 }
 
