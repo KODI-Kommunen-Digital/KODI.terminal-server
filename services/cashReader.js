@@ -27,9 +27,25 @@ class NV200CashMachine {
             { value: 20000, label: '200 EUR' },
             { value: 50000, label: '500 EUR' }
         ];
+        this.inventory = this.euroDenominations.reduce((acc, denom) => {
+            acc[denom.label] = 0;
+            return acc;
+        }, {});
+        this.totalAmount = 0;
         this.currentNote = null;
         this.logDir = path.join(__dirname, '..', 'logs', 'cashMachine');
         this.ensureLogDirectory();
+    }
+
+
+    updateInventory(denomination) {
+        if (this.inventory.hasOwnProperty(denomination.label)) {
+            this.inventory[denomination.label]++;
+            this.totalAmount += denomination.value;
+            this.log(`Updated inventory: ${denomination.label} added. New count: ${this.inventory[denomination.label]}. Total amount: ${this.totalAmount/100} EUR`);
+        } else {
+            this.log(`Unknown denomination: ${denomination.label}`, 'WARN');
+        }
     }
 
     async getNoteInventory() {
@@ -213,6 +229,7 @@ class NV200CashMachine {
         try {
             await this.eSSP.close();
             this.log('NV200 stopped.');
+            return this.totalAmount;
         } catch (error) {
             this.log(`Error stopping NV200: ${error.message}`);
         }
@@ -236,8 +253,9 @@ class NV200CashMachine {
                 this.log(`Note being read: Channel ${this.currentNote}`);
                 break;
             case 'CREDIT_NOTE':
-                const denomination = this.euroDenominations[info.channel] || 'Unknown';
+                const denomination = this.euroDenominations[info.channel - 1] || { label: 'Unknown', value: 0 };
                 this.log(`Bill inserted and credited: ${JSON.stringify(denomination)}`);
+                this.updateInventory(denomination);
                 this.currentNote = null;
                 break;
             case 'NOTE_REJECTING':
@@ -357,8 +375,10 @@ class NV200CashMachine {
         try {
             await this.eSSP.close();
             this.log(`NV200 stopped by user: ${this.userId}`);
+            return this.getNoteInventory();
         } catch (error) {
             this.log(`Error stopping NV200: ${error.message}`, 'ERROR');
+            throw error;
         }
     }
 }
