@@ -5,9 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const { sendWebhook } = require('../webhook');
 
-class NV200CashMachine extends EventEmitter {
+class NV200CashMachine {
     constructor(port = serialConfig.port, baudRate = serialConfig.baudRate, debug = false, countryCode = 'EUR', userId = null) {
-        super();
         this.eSSP = new sspLib({
             id: 0x00,
             fixedKey: '0123456701234567',
@@ -29,7 +28,7 @@ class NV200CashMachine extends EventEmitter {
             { value: 50000, label: '500 EUR' }
         ];
         this.currentNote = null;
-        this.logDir = path.join(__dirname, 'logs/cashMachine');
+        this.logDir = path.join(__dirname, '..', 'logs', 'cashMachine');
         this.ensureLogDirectory();
     }
 
@@ -48,11 +47,11 @@ class NV200CashMachine extends EventEmitter {
                     if (result.status === 'OK') {
                         inventory[denom.label] = result.info.route;
                     } else {
-                        this.log(`Failed to get denomination route for ${denom.label}: ${result.status}`);
+                        this.log(`Failed to get denomination route for ${denom.label}: ${result.status}`, 'WARN');
                         inventory[denom.label] = 'Unknown';
                     }
                 } catch (error) {
-                    this.log(`Error getting denomination route for ${denom.label}: ${error.message}`);
+                    this.log(`Error getting denomination route for ${denom.label}: ${error.message}`, 'ERROR');
                     inventory[denom.label] = 'Error';
                 }
             }
@@ -61,7 +60,7 @@ class NV200CashMachine extends EventEmitter {
             return inventory;
 
         } catch (error) {
-            this.log(`Error getting note inventory: ${error.message}`);
+            this.log(`Error getting note inventory: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -81,7 +80,7 @@ class NV200CashMachine extends EventEmitter {
 
             return result;
         } catch (error) {
-            this.log(`Error setting denomination route: ${error.message}`);
+            this.log(`Error setting denomination route: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -92,7 +91,7 @@ class NV200CashMachine extends EventEmitter {
             this.log(`Float amount result: ${JSON.stringify(result)}`);
             return result;
         } catch (error) {
-            this.log(`Error floating amount: ${error.message}`);
+            this.log(`Error floating amount: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -113,14 +112,14 @@ class NV200CashMachine extends EventEmitter {
         return path.join(this.logDir, `${day}${month}${year}.log`);
     }
 
-    log(message) {
+    log(message, severity = 'INFO') {
         const timestamp = new Date().toISOString();
-        const logMessage = `${timestamp} - ${message}\n`;
+        const logMessage = `${timestamp} - ${severity}: ${message}\n`;
         const logFile = this.getLogFilename();
         fs.appendFile(logFile, logMessage, (err) => {
             if (err) console.error('Error writing to log file:', err);
         });
-        console.log(message);
+        console.log(logMessage);
     }
 
     async initialize() {
@@ -128,7 +127,7 @@ class NV200CashMachine extends EventEmitter {
             await this.eSSP.open(this.port, this.portOptions);
             this.log(`NV200 connected on ${this.port}`);
         } catch (error) {
-            this.log(`Initialization error: ${error.message}`);
+            this.log(`Initialization error: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -138,7 +137,7 @@ class NV200CashMachine extends EventEmitter {
             const enableResult = await this.eSSP.command('ENABLE');
             this.log(`Enable result: ${JSON.stringify(enableResult)}`);
         } catch (error) {
-            this.log(`Enable error: ${error.message}`);
+            this.log(`Enable error: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -149,7 +148,7 @@ class NV200CashMachine extends EventEmitter {
             this.log(`NV200 Serial number: ${result.info.serial_number}`);
             return result.info.serial_number;
         } catch (error) {
-            this.log(`Failed to get serial number: ${error.message}`);
+            this.log(`Failed to get serial number: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -164,13 +163,13 @@ class NV200CashMachine extends EventEmitter {
                 } else if (typeof pollResult.info === 'object') {
                     this.handlePollInfo(pollResult.info);
                 } else {
-                    this.log(`Unexpected info structure: ${JSON.stringify(pollResult.info)}`);
+                    this.log(`Unexpected info structure: ${JSON.stringify(pollResult.info)}`, 'WARN');
                 }
             }
             
             return pollResult;
         } catch (error) {
-            this.log(`Polling error: ${error.message}`);
+            this.log(`Polling error: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -181,7 +180,7 @@ class NV200CashMachine extends EventEmitter {
             this.log(`Payout result: ${JSON.stringify(payoutResult)}`);
             return payoutResult;
         } catch (error) {
-            this.log(`Payout error: ${error.message}`);
+            this.log(`Payout error: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -192,7 +191,7 @@ class NV200CashMachine extends EventEmitter {
             this.log(`Cashbox emptied: ${JSON.stringify(emptyResult)}`);
             return emptyResult;
         } catch (error) {
-            this.log(`Empty cashbox error: ${error.message}`);
+            this.log(`Empty cashbox error: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -221,17 +220,15 @@ class NV200CashMachine extends EventEmitter {
 
     handlePollInfo(info) {
         if (!info || !info.name) {
-            // Skip logging for undefined or empty info
             return;
         }
         this.log(`Handling info: ${info.name}`);
         switch (info.name) {
             case 'SLAVE_RESET':
-                this.log('The device has reset itself.');
-                this.emit('deviceReset');
+                this.log('The device has reset itself.', 'WARN');
                 break;
             case 'DISABLED':
-                this.log('Device is disabled. Attempting to enable...');
+                this.log('Device is disabled. Attempting to enable...', 'WARN');
                 this.enableDevice();
                 break;
             case 'READ_NOTE':
@@ -241,15 +238,13 @@ class NV200CashMachine extends EventEmitter {
             case 'CREDIT_NOTE':
                 const denomination = this.euroDenominations[info.channel] || 'Unknown';
                 this.log(`Bill inserted and credited: ${JSON.stringify(denomination)}`);
-                this.emit('billInserted', { denomination, channel: info.channel });
                 this.currentNote = null;
                 break;
             case 'NOTE_REJECTING':
-                this.log('Note is being rejected');
+                this.log('Note is being rejected', 'WARN');
                 break;
             case 'NOTE_REJECTED':
-                this.log('Note has been rejected');
-                this.emit('noteRejected');
+                this.log('Note has been rejected', 'WARN');
                 break;
             case 'NOTE_STACKING':
                 this.log('Note is being stacked');
@@ -258,20 +253,16 @@ class NV200CashMachine extends EventEmitter {
                 this.log('Note has been stacked');
                 break;
             case 'FRAUD_ATTEMPT':
-                this.log('Fraud attempt detected');
-                this.emit('fraudAttempt');
+                this.log('Fraud attempt detected', 'ERROR');
                 break;
             case 'STACKER_FULL':
-                this.log('Stacker is full');
-                this.emit('stackerFull');
+                this.log('Stacker is full', 'WARN');
                 break;
             case 'CASH_BOX_REMOVED':
-                this.log('Cash box has been removed');
-                this.emit('cashBoxRemoved');
+                this.log('Cash box has been removed', 'WARN');
                 break;
             case 'CASH_BOX_REPLACED':
                 this.log('Cash box has been replaced');
-                this.emit('cashBoxReplaced');
                 break;
             case 'NOTE_STORED_IN_PAYOUT':
                 this.log('Note stored in payout device');
@@ -281,7 +272,6 @@ class NV200CashMachine extends EventEmitter {
                 break;
             case 'NOTE_DISPENSED':
                 this.log('Note has been dispensed');
-                this.emit('noteDispensed');
                 break;
             case 'NOTE_TRANSFERRED_TO_STACKER':
                 this.log('Note transferred to stacker');
@@ -291,10 +281,9 @@ class NV200CashMachine extends EventEmitter {
                 break;
             case 'SMART_EMPTIED':
                 this.log('Smart emptying completed');
-                this.emit('smartEmptied');
                 break;
             case 'CHANNEL_DISABLE':
-                this.log(`Channel disabled: ${info.description} `);
+                this.log(`Channel disabled: ${info.description}`, 'WARN');
                 break;
             case 'CHANNEL_ENABLE':
                 this.log(`Channel ${info.channel} enabled`);
@@ -303,46 +292,39 @@ class NV200CashMachine extends EventEmitter {
                 this.log('Device is initializing');
                 break;
             case 'COIN_MECH_ERROR':
-                this.log('Coin mechanism error');
-                this.emit('coinMechError');
+                this.log('Coin mechanism error', 'ERROR');
                 break;
             case 'COIN_MECH_JAM':
-                this.log('Coin mechanism jam');
-                this.emit('coinMechJam');
+                this.log('Coin mechanism jam', 'ERROR');
                 break;
             case 'BARCODE_TICKET_VALIDATED':
                 this.log('Barcode ticket validated');
-                this.emit('barcodeValidated', info.data);
                 break;
             case 'BARCODE_TICKET_ACKNOWLEDGE':
                 this.log('Barcode ticket acknowledged');
                 break;
             case 'SAFE_JAM':
-                this.log('Safe jam detected');
-                this.emit('safeJam');
+                this.log('Safe jam detected', 'ERROR');
                 break;
             case 'UNSAFE_JAM':
-                this.log('Unsafe jam detected');
-                this.emit('unsafeJam');
+                this.log('Unsafe jam detected', 'ERROR');
                 break;
             case 'ERROR':
-                this.log(`Generic error occurred: ${JSON.stringify(info.data)}`);
-                this.emit('error', info.data);
+                this.log(`Generic error occurred: ${JSON.stringify(info.data)}`, 'ERROR');
                 break;
             default:
-                this.log(`Unhandled info: ${info.name}`);
-                this.emit('unknownEvent', info);
+                this.log(`Unhandled info: ${info.name}`, 'WARN');
         }
         this.sendWebhookForInfo(info);
     }
-    
+
     async sendWebhookForInfo(info) {
         const eventData = { ...info };
         try {
             await sendWebhook(eventData, 'cashreader');
             this.log(`Webhook sent successfully for event: ${info.name}`);
         } catch (error) {
-            this.log(`Error sending webhook for event: ${info.name} - ${error.message}`);
+            this.log(`Error sending webhook for event: ${info.name} - ${error.message}`, 'ERROR');
         }
     }
 
@@ -358,14 +340,14 @@ class NV200CashMachine extends EventEmitter {
                 try {
                     await this.pollDevice();
                 } catch (error) {
-                    this.log(`Error during polling: ${error.message}`);
+                    this.log(`Error during polling: ${error.message}`, 'ERROR');
                 }
             }, 1000);
 
             this.log(`Cash machine started by user: ${this.userId}`);
             return this;
         } catch (error) {
-            this.log(`Error during start by user ${this.userId}: ${error.message}`);
+            this.log(`Error during start by user ${this.userId}: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -376,14 +358,14 @@ class NV200CashMachine extends EventEmitter {
             await this.eSSP.close();
             this.log(`NV200 stopped by user: ${this.userId}`);
         } catch (error) {
-            this.log(`Error stopping NV200: ${error.message}`);
+            this.log(`Error stopping NV200: ${error.message}`, 'ERROR');
         }
     }
 }
 
 module.exports = {
-    start: async function(port, baudRate, debug = false, countryCode = 'EUR') {
-        const nv200 = new NV200CashMachine(port, baudRate, debug, countryCode);
+    start: async function(port, baudRate, debug = false, countryCode = 'EUR', userId = null) {
+        const nv200 = new NV200CashMachine(port, baudRate, debug, countryCode, userId);
         try {
             await nv200.start();
             return nv200;
