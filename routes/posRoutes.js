@@ -62,7 +62,7 @@ router.post("/startpayment", (req, res) => {
         logMessage(`Error: Invalid userId sent: ${userId}`);
         return res.status(400).send("Invalid userId sent");
     }
-    logMessage(`Starting payment process for amount: ${amount}, CardId: ${cardId}`);
+    logMessage(`Starting payment process for Amount: ${amount}, CardId: ${cardId}, UserId: ${userId}`);
 
     const process = spawn('./Portalum.Zvt.EasyPay.exe', ['--amount', amount]);
 
