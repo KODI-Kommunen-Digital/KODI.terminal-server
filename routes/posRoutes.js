@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 const { encrypt } = require("../utils/AES");
-const {StoreCardTransactionEnums} = require("../constants/databaseEnums")
+const StoreCardTransactionEnums = require("../constants/databaseEnums")
 
 const router = express.Router();
 

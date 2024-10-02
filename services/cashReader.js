@@ -212,29 +212,6 @@ class NV200CashMachine {
         }
     }
 
-    async start() {
-        await this.initialize();
-        await this.enableDevice();
-        this.pollInterval = setInterval(async () => {
-            try {
-                await this.pollDevice();
-            } catch (error) {
-                this.log(`Error during polling: ${error.message}`);
-            }
-        }, 1000);
-    }
-
-    async stop() {
-        clearInterval(this.pollInterval);
-        try {
-            await this.eSSP.close();
-            this.log('NV200 stopped.');
-            return this.totalAmount;
-        } catch (error) {
-            this.log(`Error stopping NV200: ${error.message}`);
-        }
-    }
-
     handlePollInfo(info) {
         if (!info || !info.name) {
             return;
@@ -375,7 +352,7 @@ class NV200CashMachine {
         try {
             await this.eSSP.close();
             this.log(`NV200 stopped by user: ${this.userId}`);
-            return this.getNoteInventory();
+            return { totalAmount: this.totalAmount, inventory: this.inventory };
         } catch (error) {
             this.log(`Error stopping NV200: ${error.message}`, 'ERROR');
             throw error;

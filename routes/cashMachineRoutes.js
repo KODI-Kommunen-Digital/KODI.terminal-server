@@ -3,7 +3,7 @@ const router = express.Router();
 const cashReader = require('../services/cashReader');
 const axios = require('axios');
 const { encrypt } = require("../utils/AES");
-const { StoreCardTransactionEnums } = require("../constants/databaseEnums")
+const StoreCardTransactionEnums = require("../constants/databaseEnums")
 require('dotenv').config();
 
 let cashMachineInstance = null;
@@ -40,10 +40,9 @@ router.post("/stop", async (req, res) => {
     }
     
     try {
-        const totalAmount = await cashMachineInstance.stop(userId);
+        const cashMachineResponse = await cashMachineInstance.stop(userId);
         
         // Prepare data for the remote API call
-        const noteInventory = await cashMachineInstance.getNoteInventory();
         const apiDomain = process.env.CONTAINER_API;
         const storeData = encrypt({
             credit: totalAmount,
@@ -72,8 +71,8 @@ router.post("/stop", async (req, res) => {
         // Prepare the response
         const response = {
             message: "Cash machine stopped successfully",
-            totalAmount: totalAmount,
-            noteInventory: noteInventory,
+            totalAmount: cashMachineResponse.totalAmount,
+            noteInventory: cashMachineResponse.inventory,
             apiResponse: apiResponse.data
         };
 
