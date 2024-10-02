@@ -6,7 +6,7 @@ const path = require('path');
 const { sendWebhook } = require('../webhook');
 
 class NV200CashMachine {
-    constructor(port = serialConfig.port, baudRate = serialConfig.baudRate, debug = false, countryCode = 'EUR', userId = null) {
+    constructor(port, baudRate, debug, countryCode, userId) {
         this.eSSP = new sspLib({
             id: 0x00,
             fixedKey: '0123456701234567',
@@ -384,8 +384,8 @@ class NV200CashMachine {
 }
 
 module.exports = {
-    start: async function(port, baudRate, debug = false, countryCode = 'EUR', userId = null) {
-        const nv200 = new NV200CashMachine(port, baudRate, debug, countryCode, userId);
+    start: async function(userId) {
+        const nv200 = new NV200CashMachine(serialConfig.port, serialConfig.baudRate, false, 'EUR', userId);
         try {
             await nv200.start();
             return nv200;
