@@ -1,36 +1,45 @@
+const HID = require('node-hid');
 const { sendWebhook } = require('../webhook');
-const readline = require('readline');
+
+// You may need to adjust these values based on your specific barcode scanner
+const VENDOR_ID = 0x0000;  // Replace with your scanner's vendor ID
+const PRODUCT_ID = 0x0000; // Replace with your scanner's product ID
 
 function start() {
-    console.log('Barcode scanner (keyboard input) is ready...');
+    console.log('Searching for barcode scanner...');
 
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
+    let devices = HID.devices();
+    console.log(devices);
+    let deviceInfo = devices.find(d => d.vendorId === VENDOR_ID && d.productId === PRODUCT_ID);
+
+    if (!deviceInfo) {
+        console.error('Barcode scanner not found. Please check the VENDOR_ID and PRODUCT_ID.');
+        return;
+    }
+
+    let device = new HID.HID(deviceInfo.path);
+    console.log('Barcode scanner connected and ready.');
 
     let buffer = '';
-    const timeoutDuration = 1000; // milliseconds
-    let timeoutId;
 
-    rl.input.on('data', (chunk) => {
-        buffer += chunk.toString();
+    device.on('data', (data) => {
+        // Most barcode scanners will send the entire code at once
+        let scannedData = data.toString('ascii').replace(/\u0000/g, '').trim();
         
-        clearTimeout(timeoutId);
-        
-        timeoutId = setTimeout(() => {
-            if (buffer.trim()) {
-                console.log('Barcode scanned:', buffer.trim());
-                
-                // Send Discord webhook notification
-                sendWebhook({ barcodeData: buffer.trim() }, 'barcode')
-                    .then(() => console.log('Webhook sent successfully for product scan'))
-                    .catch(error => console.error('Error sending webhook for product scan:', error));
-                
-                buffer = '';
-            }
-        }, timeoutDuration);
+        if (scannedData) {
+            console.log('Barcode scanned:', scannedData);
+
+            // Send Discord webhook notification
+            sendWebhook({ barcodeData: scannedData }, 'barcode')
+                .then(() => console.log('Webhook sent successfully for product scan'))
+                .catch(error => console.error('Error sending webhook for product scan:', error));
+        }
     });
 }
+
+process.on('SIGINT', () => {
+    console.log('Stopping barcode scanner...');
+    process.exit();
+});
 
 module.exports = { start };
