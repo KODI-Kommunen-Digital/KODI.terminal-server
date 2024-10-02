@@ -45,7 +45,7 @@ router.post("/stop", async (req, res) => {
         // Prepare data for the remote API call
         const apiDomain = process.env.CONTAINER_API;
         const storeData = encrypt({
-            credit: totalAmount,
+            credit: cashMachineResponse.totalAmount,
             cardId: cardId,
             source: StoreCardTransactionEnums.source.cash
 
