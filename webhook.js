@@ -27,7 +27,7 @@ async function sendWebhook(data, type) {
     const payload = JSON.stringify(payloadData);
     try {
         let response = await axios.post(webhookUrl, 
-            { payload }, 
+            payload, 
             { headers: { 'Content-Type': 'application/json' } }
         );
         console.log(response);

@@ -1,4 +1,4 @@
-export const StoreCardTransactionEnums = {
+const StoreCardTransactionEnums = {
     type: {
       debit: 1,
       creditByCash: 2,
@@ -9,3 +9,5 @@ export const StoreCardTransactionEnums = {
       card: 2,
     },
   };
+
+  module.exports = StoreCardTransactionEnums;

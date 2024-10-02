@@ -20,10 +20,6 @@ const message = {
 
 app.use(helmet());
 app.use(bodyParser.json());
-
-const allowlist = ['::ffff:127.0.0.1'];
-
-app.use(ipfilter(allowlist, { mode: 'allow' }))
 app.use((err, req, res, _next) => {
     if (err instanceof IpDeniedError) {
         res.status(401).send("Access Denied")

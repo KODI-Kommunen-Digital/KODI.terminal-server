@@ -29,9 +29,6 @@ function log(message, severity = 'INFO') {
     fs.appendFile(logFile, logMessage, (err) => {
         if (err) console.error('Error writing to log file:', err);
     });
-    
-    // Log to console as well
-    console.log(logMessage);
 }
 
 function start() {
