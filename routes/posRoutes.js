@@ -79,7 +79,7 @@ router.post("/startpayment", (req, res) => {
         if (returnCode === 0) {
             logMessage("Payment process successful");
             // Construct the external API URL
-            const apiUrl = process.env.CONTAINER_API + `/cities/${process.env.CitYID}/store/${process.env.STOREID}/user/${userId}/card/addCredit`;
+            const apiUrl = process.env.CONTAINER_API + `/cities/${process.env.CITYID}/store/${process.env.STOREID}/user/${userId}/card/addCredit`;
             const encryptData = encrypt({
                 credit: amount,
                 cardId: cardId,
