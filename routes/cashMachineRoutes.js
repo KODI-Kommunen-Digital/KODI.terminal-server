@@ -7,26 +7,69 @@ const StoreCardTransactionEnums = require("../constants/databaseEnums")
 require('dotenv').config();
 
 let cashMachineInstance = null;
+let startingMachine = false;
 
 router.post("/start", async (req, res) => {
     const { userId } = req.body;
 
     if (!userId) {
-        return res.status(400).send("userId is required");
+        return res.status(400).json({
+            status: 'error',
+            message: "userId is required"
+        });
     }
 
-    if (cashMachineInstance) {
-        return res.status(400).send("Cash machine is already running");
+    // If the machine is already starting, return a "please wait" response
+    if (startingMachine) {
+        return res.status(202).json({
+            status: 'pending',
+            message: "Cash machine is currently starting. Please wait and try again.",
+            machineStatus: 'starting'
+        });
     }
-    
+
+    // If the machine is already running, check its status
+    if (cashMachineInstance) {
+        try {
+            const pollResult = await cashMachineInstance.pollDevice();
+            if (pollResult.status === 'OK') {
+                return res.status(200).json({
+                    status: 'success',
+                    message: "Cash machine is already running",
+                    machineStatus: 'running'
+                });
+            } else {
+                // If poll fails, reset the instance
+                cashMachineInstance = null;
+            }
+        } catch (error) {
+            // If polling throws an error, reset the instance
+            cashMachineInstance = null;
+        }
+    }
+
+    // At this point, either cashMachineInstance was null or it was reset due to an error
+    startingMachine = true;
     try {
         cashMachineInstance = await cashReader.start(userId);
-        res.send("Cash machine started successfully");
+        startingMachine = false;
+        res.status(200).json({
+            status: 'success',
+            message: "Cash machine started successfully",
+            machineStatus: 'started'
+        });
     } catch (error) {
         console.error("Failed to start cash machine:", error);
-        res.status(500).send(`Failed to start cash machine: ${error.message}`);
+        cashMachineInstance = null;
+        startingMachine = false;
+        res.status(500).json({
+            status: 'error',
+            message: `Failed to start cash machine: ${error.message}`,
+            machineStatus: 'error'
+        });
     }
 });
+
 
 router.post("/stop", async (req, res) => {
     const { userId, cardId } = req.body;

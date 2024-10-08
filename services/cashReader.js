@@ -35,14 +35,28 @@ class NV200CashMachine {
         this.currentNote = null;
         this.logDir = path.join(__dirname, '..', 'logs', 'cashMachine');
         this.ensureLogDirectory();
+        this.currentTransaction = {
+            totalAmount: 0,
+            notes: {}
+        };
     }
-
 
     updateInventory(denomination) {
         if (this.inventory.hasOwnProperty(denomination.label)) {
             this.inventory[denomination.label]++;
             this.totalAmount += denomination.value;
             this.log(`Updated inventory: ${denomination.label} added. New count: ${this.inventory[denomination.label]}. Total amount: ${this.totalAmount/100} EUR`);
+            
+            // Update currentTransaction
+            this.currentTransaction.totalAmount += denomination.value;
+            if (this.currentTransaction.notes[denomination.label]) {
+                this.currentTransaction.notes[denomination.label].count++;
+            } else {
+                this.currentTransaction.notes[denomination.label] = {
+                    count: 1,
+                    value: denomination.value
+                };
+            }
         } else {
             this.log(`Unknown denomination: ${denomination.label}`, 'WARN');
         }
@@ -111,8 +125,6 @@ class NV200CashMachine {
             throw error;
         }
     }
-
-
 
     ensureLogDirectory() {
         if (!fs.existsSync(this.logDir)) {
@@ -217,6 +229,7 @@ class NV200CashMachine {
             return;
         }
         this.log(`Handling info: ${info.name}`);
+        let data = null;
         switch (info.name) {
             case 'SLAVE_RESET':
                 this.log('The device has reset itself.', 'WARN');
@@ -231,6 +244,7 @@ class NV200CashMachine {
                 break;
             case 'CREDIT_NOTE':
                 const denomination = this.euroDenominations[info.channel - 1] || { label: 'Unknown', value: 0 };
+                data = denomination;
                 this.log(`Bill inserted and credited: ${JSON.stringify(denomination)}`);
                 this.updateInventory(denomination);
                 this.currentNote = null;
@@ -310,11 +324,16 @@ class NV200CashMachine {
             default:
                 this.log(`Unhandled info: ${info.name}`, 'WARN');
         }
-        this.sendWebhookForInfo(info);
+        this.sendWebhookForInfo(info, data);
     }
 
-    async sendWebhookForInfo(info) {
+    async sendWebhookForInfo(info, data = null) {
         const eventData = { ...info };
+
+        if (data) {
+            eventData.data = data;
+        }
+
         try {
             await sendWebhook(eventData, 'cashreader');
             this.log(`Webhook sent successfully for event: ${info.name}`);
@@ -323,28 +342,57 @@ class NV200CashMachine {
         }
     }
 
-    async start() {
-        try {
-            await this.initialize();
-            await this.enableDevice();
-            
-            // Add a short delay to ensure the device is ready
-            await new Promise(resolve => setTimeout(resolve, 2000));
+    async start(maxRetries = 3, retryDelay = 2000) {
+        let attempts = 0;
+        let started = false;
 
-            this.pollInterval = setInterval(async () => {
-                try {
-                    await this.pollDevice();
-                } catch (error) {
-                    this.log(`Error during polling: ${error.message}`, 'ERROR');
+        while (attempts < maxRetries && !started) {
+            try {
+                await this.initialize();
+                await this.enableDevice();
+                
+                // Add a short delay to ensure the device is ready
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Test if the device is responsive
+                const pollResult = await this.pollDevice();
+                if (pollResult.status === 'OK') {
+                    started = true;
+                    this.log(`Cash machine started successfully by user: ${this.userId}`);
+                } else {
+                    throw new Error('Device not responsive after initialization');
                 }
-            }, 1000);
+            } catch (error) {
+                attempts++;
+                this.log(`Start attempt ${attempts} failed: ${error.message}`, 'WARN');
+                
+                if (attempts < maxRetries) {
+                    this.log(`Retrying in ${retryDelay / 1000} seconds...`);
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                }
+            }
+        }
 
-            this.log(`Cash machine started by user: ${this.userId}`);
-            return this;
-        } catch (error) {
-            this.log(`Error during start by user ${this.userId}: ${error.message}`, 'ERROR');
+        if (!started) {
+            const error = new Error(`Failed to start cash machine after ${maxRetries} attempts`);
+            this.log(error.message, 'ERROR');
             throw error;
         }
+
+        // Only set up polling if the machine started successfully
+        this.setupPolling();
+
+        return this;
+    }
+
+    setupPolling() {
+        this.pollInterval = setInterval(async () => {
+            try {
+                await this.pollDevice();
+            } catch (error) {
+                this.log(`Error during polling: ${error.message}`, 'ERROR');
+            }
+        }, 1000);
     }
 
     async stop() {
@@ -352,6 +400,8 @@ class NV200CashMachine {
         try {
             await this.eSSP.close();
             this.log(`NV200 stopped by user: ${this.userId}`);
+            // Send final transaction webhook
+            await this.sendWebhookForInfo({ name: 'TRANSACTION_COMPLETED' }, this.currentTransaction);
             return { totalAmount: this.totalAmount, inventory: this.inventory };
         } catch (error) {
             this.log(`Error stopping NV200: ${error.message}`, 'ERROR');
