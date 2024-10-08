@@ -5,7 +5,10 @@ const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 const { encrypt } = require("../utils/AES");
+const axios = require('axios');
 const StoreCardTransactionEnums = require("../constants/databaseEnums")
+const env = require('dotenv').config().parsed;
+
 
 const router = express.Router();
 
@@ -102,25 +105,30 @@ router.post("/startpayment", (req, res) => {
         logMessage(`Process stderr: ${data}`);
     });
 
-    process.on('close', (returnCode) => {
+    process.on('close', async (returnCode) => {
         logMessage(`Process exited with code ${returnCode}`);
-        if (returnCode === 0) {
+        if (returnCode == 0) {
             logMessage("Payment process successful");
             // Construct the external API URL
-            const apiUrl = process.env.CONTAINER_API + `/cities/${process.env.CITYID}/store/${process.env.STOREID}/user/${userId}/card/addCredit`;
-            const encryptData = encrypt({
+            const apiUrl = env.CONTAINER_API + `/cities/${env.CITYID}/store/${env.STOREID}/user/${userId}/card/addCredit`;
+            const encryptData = encrypt(JSON.stringify({
                 credit: amount,
                 cardId: cardId,
                 source: StoreCardTransactionEnums.source.card
-
-            },  process.env.REACT_APP_ENCRYPTION_KEY,
-            process.env.REACT_APP_ENCRYPTION_IV)
+            }),  env.REACT_APP_ENCRYPTION_KEY,
+            env.REACT_APP_ENCRYPTION_IV)
             // Make the PATCH request
-            const response = axios.patch(apiUrl, {
-                storeData: encryptData
-            });
-            logMessage(`API response: ${response.data}`);
-            res.send("Success");
+            try {
+                const response = await axios.patch(apiUrl, {
+                    storeData: encryptData
+                });
+                logMessage(`API response: ${response.data}`);
+                res.send("Success");
+            } catch (error) {
+                logMessage(`API Error: ${error}`);
+                res.send("Failed");
+            }
+            
         } else {
             logMessage(`Payment process failed with status code ${returnCode}`, "ERROR");
             res.status(500).send(`Failed with status code ${returnCode}`);
