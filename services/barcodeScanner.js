@@ -1,45 +1,48 @@
-require('dotenv').config();
-const HID = require('node-hid');
+const { GlobalKeyboardListener } = require("node-global-key-listener");
 const { sendWebhook } = require('../webhook');
 
-const VENDOR_ID = parseInt(process.env.BARCODE_SCANNER_VENDOR_ID);
-const PRODUCT_ID = parseInt(process.env.BARCODE_SCANNER_PRODUCT_ID);
+const v = new GlobalKeyboardListener();4018077721779
 
-function start() {
-    console.log('Searching for barcode scanner...');
 
-    if (isNaN(VENDOR_ID) || isNaN(PRODUCT_ID)) {
-        console.error('Invalid VENDOR_ID or PRODUCT_ID. Please check your .env file.');
-        return;
+let inputBuffer = '';
+let timeoutId = null;
+
+function handleInput(e) {
+
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
+
+  // Only add printable characters to the buffer
+  if (e.state === "DOWN" && e.name && e.name.length === 1) {
+    inputBuffer += e.name;
+  }
+
+  timeoutId = setTimeout(() => {
+    if (inputBuffer.length > 0) {
+      console.log('Barcode scanned:', inputBuffer);
+    //  sendWebhook({ barcodeData: inputBuffer }, 'barcode')
+    //    .then(() => console.log('Webhook sent successfully for product scan'))
+    //    .catch(error => console.error('Error sending webhook for product scan:', error));
+      inputBuffer = '';
     }
-
-    let devices = HID.devices();
-    let deviceInfo = devices.find(d => d.vendorId === VENDOR_ID && d.productId === PRODUCT_ID);
-
-    if (!deviceInfo) {
-        console.error('Barcode scanner not found. Please check the VENDOR_ID and PRODUCT_ID in your .env file.');
-        return;
-    }
-
-    let device = new HID.HID(deviceInfo.path);
-    console.log('Barcode scanner connected and ready.');
-
-    device.on('data', (data) => {
-        let scannedData = data.toString('ascii').replace(/\u0000/g, '').trim();
-        
-        if (scannedData) {
-            console.log('Barcode scanned:', scannedData);
-
-            sendWebhook({ barcodeData: scannedData }, 'barcode')
-                .then(() => console.log('Webhook sent successfully for product scan'))
-                .catch(error => console.error('Error sending webhook for product scan:', error));
-        }
-    });
+  }, 100); // Adjust this delay as needed
 }
 
+function start() {
+  try {
+    v.addListener(handleInput);
+    console.log('Global barcode scanner listener started. Scanning will work in the background.');
+  } catch (error) {
+    console.error('Error starting barcode scanner:', error.message);
+  }
+}
+
+// Graceful shutdown
 process.on('SIGINT', () => {
-    console.log('Stopping barcode scanner...');
-    process.exit();
+  v.kill();
+  console.log('Stopping barcode scanner...');
+  process.exit();
 });
 
 module.exports = { start };
