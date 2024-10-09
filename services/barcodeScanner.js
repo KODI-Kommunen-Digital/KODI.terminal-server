@@ -45,4 +45,5 @@ process.on('SIGINT', () => {
   process.exit();
 });
 
+// Export the start function
 module.exports = { start };
