@@ -1,7 +1,7 @@
 const { GlobalKeyboardListener } = require("node-global-key-listener");
 const { sendWebhook } = require('../webhook');
 
-const v = new GlobalKeyboardListener();4018077721779
+const v = new GlobalKeyboardListener();
 
 
 let inputBuffer = '';
@@ -21,9 +21,9 @@ function handleInput(e) {
   timeoutId = setTimeout(() => {
     if (inputBuffer.length > 0) {
       console.log('Barcode scanned:', inputBuffer);
-    //  sendWebhook({ barcodeData: inputBuffer }, 'barcode')
-    //    .then(() => console.log('Webhook sent successfully for product scan'))
-    //    .catch(error => console.error('Error sending webhook for product scan:', error));
+      sendWebhook({ barcodeData: inputBuffer }, 'barcode')
+        .then(() => console.log('Webhook sent successfully for product scan'))
+        .catch(error => console.error('Error sending webhook for product scan:', error));
       inputBuffer = '';
     }
   }, 100); // Adjust this delay as needed
