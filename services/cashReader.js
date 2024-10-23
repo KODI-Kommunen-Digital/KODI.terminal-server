@@ -39,6 +39,7 @@ class NV200CashMachine {
             totalAmount: 0,
             notes: {}
         };
+        this.isReset = false;
     }
 
     updateInventory(denomination) {
@@ -233,6 +234,13 @@ class NV200CashMachine {
         switch (info.name) {
             case 'SLAVE_RESET':
                 this.log('The device has reset itself.', 'WARN');
+                this.handleSlaveReset()
+                .then(() => {
+                    this.log('Slave reset handled successfully.', 'INFO');
+                })
+                .catch((error) => {
+                    this.log(`Failed to handle slave reset: ${error.message}`, 'ERROR');
+                });
                 break;
             case 'DISABLED':
                 this.log('Device is disabled. Attempting to enable...', 'WARN');
@@ -342,15 +350,15 @@ class NV200CashMachine {
         }
     }
 
-    async start(maxRetries = 3, retryDelay = 2000) {
+    async initializeAndStart(maxRetries = 3, retryDelay = 2000, isReset = false) {
         let attempts = 0;
         let started = false;
 
         while (attempts < maxRetries && !started) {
             try {
-                await this.initialize();
-                await this.enableDevice();
-                
+                await this.initialize(); // Reinitialize the device
+                await this.enableDevice(); // Enable it for use
+
                 // Add a short delay to ensure the device is ready
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -358,14 +366,16 @@ class NV200CashMachine {
                 const pollResult = await this.pollDevice();
                 if (pollResult.status === 'OK') {
                     started = true;
-                    this.log(`Cash machine started successfully by user: ${this.userId}`);
+                    this.log(
+                        `Cash machine ${isReset ? 'restarted' : 'started'} successfully by user: ${this.userId}`,
+                        'INFO'
+                    );
                 } else {
                     throw new Error('Device not responsive after initialization');
                 }
             } catch (error) {
                 attempts++;
-                this.log(`Start attempt ${attempts} failed: ${error.message}`, 'WARN');
-                
+                this.log(`${isReset ? 'Reinitialization' : 'Start'} attempt ${attempts} failed: ${error.message}`, 'WARN');
                 if (attempts < maxRetries) {
                     this.log(`Retrying in ${retryDelay / 1000} seconds...`);
                     await new Promise(resolve => setTimeout(resolve, retryDelay));
@@ -374,15 +384,29 @@ class NV200CashMachine {
         }
 
         if (!started) {
-            const error = new Error(`Failed to start cash machine after ${maxRetries} attempts`);
-            this.log(error.message, 'ERROR');
-            throw error;
+            const errorMessage = `Failed to ${isReset ? 'reinitialize' : 'start'} cash machine after ${maxRetries} attempts`;
+            this.log(errorMessage, 'ERROR');
+            throw new Error(errorMessage);
         }
 
         // Only set up polling if the machine started successfully
         this.setupPolling();
+    }
 
-        return this;
+    async start() {
+        this.isReset = false; // Resetting is false for a normal start
+        return this.initializeAndStart();
+    }
+
+    async handleSlaveReset() {
+        this.isReset = true; // Indicate that it's a reset operation
+        try {
+            await this.initializeAndStart(3, 2000, true);
+            this.log('Slave reset handled successfully', 'INFO');
+        } catch (error) {
+            this.log(`Failed to handle slave reset: ${error.message}`, 'ERROR');
+            throw error;
+        }
     }
 
     setupPolling() {
