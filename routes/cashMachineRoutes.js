@@ -83,26 +83,36 @@ router.post("/stop", async (req, res) => {
     }
     
     try {
+        // Stop the cash machine
         const cashMachineResponse = await cashMachineInstance.stop(userId);
-        
-        // Prepare data for the remote API call
+
+        // If the total amount is 0, just stop the machine and return a success response
+        if (cashMachineResponse.totalAmount === 0) {
+            cashMachineInstance = null;
+            return res.status(200).json({
+                message: "Cash machine stopped successfully, but no amount was credited",
+                totalAmount: cashMachineResponse.totalAmount,
+                noteInventory: cashMachineResponse.inventory,
+                apiResponse: null // No API call made
+            });
+        }
+
+        // If the amount is not 0, proceed with the API call
         const apiDomain = process.env.CONTAINER_API;
         const storeData = encrypt(
-        JSON.stringify({
-            credit: cashMachineResponse.totalAmount,
-            cardId: cardId,
-            source: StoreCardTransactionEnums.source.cash
+            JSON.stringify({
+                credit: cashMachineResponse.totalAmount,
+                cardId: cardId,
+                source: StoreCardTransactionEnums.source.cash
+            }),
+            process.env.REACT_APP_ENCRYPTION_KEY,
+            process.env.REACT_APP_ENCRYPTION_IV
+        );
 
-        }),
-        process.env.REACT_APP_ENCRYPTION_KEY,
-        process.env.REACT_APP_ENCRYPTION_IV)
-        
-        // Make the remote API call
+        // Make the remote API call to update the credit
         const apiResponse = await axios.patch(
             `${apiDomain}/cities/${process.env.CITYID}/store/${process.env.STOREID}/user/${userId}/card/addCredit`,
-            {
-                storeData
-            },
+            { storeData },
             {
                 headers: {
                     'Content-Type': 'application/json',
@@ -127,5 +137,6 @@ router.post("/stop", async (req, res) => {
         res.status(500).send(`Failed to stop cash machine or update credit: ${error.message}`);
     }
 });
+
 
 module.exports = router;
