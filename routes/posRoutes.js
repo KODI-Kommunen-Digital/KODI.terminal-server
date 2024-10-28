@@ -126,7 +126,7 @@ router.post("/startpayment", (req, res) => {
                 res.send("Success");
             } catch (error) {
                 logMessage(`API Error: ${error}`);
-                res.send("Failed");
+                res.status(400).send("Failed");
             }
             
         } else {
