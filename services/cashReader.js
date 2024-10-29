@@ -19,13 +19,13 @@ class NV200CashMachine {
         this.countryCode = countryCode;
         this.userId = userId;
         this.euroDenominations = [
-            { value: 500, label: '5 EUR' },
-            { value: 1000, label: '10 EUR' },
-            { value: 2000, label: '20 EUR' },
-            { value: 5000, label: '50 EUR' },
-            { value: 10000, label: '100 EUR' },
-            { value: 20000, label: '200 EUR' },
-            { value: 50000, label: '500 EUR' }
+            { value: 5, label: '5 EUR' },
+            { value: 10, label: '10 EUR' },
+            { value: 20, label: '20 EUR' },
+            { value: 50, label: '50 EUR' },
+            { value: 100, label: '100 EUR' },
+            { value: 200, label: '200 EUR' },
+            { value: 500, label: '500 EUR' }
         ];
         this.inventory = this.euroDenominations.reduce((acc, denom) => {
             acc[denom.label] = 0;
