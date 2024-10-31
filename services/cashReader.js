@@ -42,6 +42,28 @@ class NV200CashMachine {
         this.isReset = false;
     }
 
+    // Add method to check if enough time has passed since last reset
+    canAttemptReset() {
+        if (!this.lastResetTime) return true;
+        const minTimeBetweenResets = 30000; // 30 seconds
+        return Date.now() - this.lastResetTime >= minTimeBetweenResets;
+    }
+
+    // Add method for port cleanup
+    async cleanupPort() {
+        try {
+            if (this.eSSP) {
+                await this.eSSP.close().catch(() => {});
+                this.log('Port closed successfully');
+            }
+            // Wait for OS to fully release the port
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error) {
+            this.log(`Port cleanup error: ${error.message}`, 'ERROR');
+            throw error;
+        }
+    }
+
     updateInventory(denomination) {
         if (this.inventory.hasOwnProperty(denomination.label)) {
             this.inventory[denomination.label]++;
@@ -153,6 +175,9 @@ class NV200CashMachine {
 
     async initialize() {
         try {
+            // Clean up port first
+            await this.cleanupPort();
+            // Try to open the port
             await this.eSSP.open(this.port, this.portOptions);
             this.log(`NV200 connected on ${this.port}`);
         } catch (error) {
@@ -356,11 +381,12 @@ class NV200CashMachine {
 
         while (attempts < maxRetries && !started) {
             try {
-                await this.initialize(); // Reinitialize the device
-                await this.enableDevice(); // Enable it for use
+                await this.initialize();
+                await this.enableDevice();
 
-                // Add a short delay to ensure the device is ready
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Add a longer delay for reset scenarios
+                const waitTime = isReset ? 3000 : 2000;
+                await new Promise(resolve => setTimeout(resolve, waitTime));
 
                 // Test if the device is responsive
                 const pollResult = await this.pollDevice();
@@ -377,8 +403,10 @@ class NV200CashMachine {
                 attempts++;
                 this.log(`${isReset ? 'Reinitialization' : 'Start'} attempt ${attempts} failed: ${error.message}`, 'WARN');
                 if (attempts < maxRetries) {
-                    this.log(`Retrying in ${retryDelay / 1000} seconds...`);
-                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    // Use exponential backoff for retry delays
+                    const currentDelay = retryDelay * Math.pow(2, attempts - 1);
+                    this.log(`Retrying in ${currentDelay / 1000} seconds...`);
+                    await new Promise(resolve => setTimeout(resolve, currentDelay));
                 }
             }
         }
@@ -389,7 +417,6 @@ class NV200CashMachine {
             throw new Error(errorMessage);
         }
 
-        // Only set up polling if the machine started successfully
         this.setupPolling();
     }
 
@@ -399,9 +426,31 @@ class NV200CashMachine {
     }
 
     async handleSlaveReset() {
-        this.isReset = true; // Indicate that it's a reset operation
+        if (!this.canAttemptReset()) {
+            this.log('Reset attempted too soon after previous reset', 'WARN');
+            return;
+        }
+
+        this.isReset = true;
+        this.lastResetTime = Date.now();
+        this.resetAttempts++;
+
         try {
-            await this.initializeAndStart(3, 2000, true);
+            // First, try to disable the device gracefully
+            await this.eSSP.command('DISABLE').catch(() => {});
+            
+            // Clean up port and wait
+            await this.cleanupPort();
+            
+            // Wait for device to stabilize - longer delay for more reset attempts
+            const stabilizationDelay = Math.min(5000 * this.resetAttempts, 20000);
+            this.log(`Waiting ${stabilizationDelay}ms for device to stabilize...`);
+            await new Promise(resolve => setTimeout(resolve, stabilizationDelay));
+
+            // Attempt reinitialization with exponential backoff
+            await this.initializeAndStart(3, 5000, true);
+            
+            this.resetAttempts = 0;
             this.log('Slave reset handled successfully', 'INFO');
         } catch (error) {
             this.log(`Failed to handle slave reset: ${error.message}`, 'ERROR');
@@ -422,7 +471,10 @@ class NV200CashMachine {
     async stop() {
         clearInterval(this.pollInterval);
         try {
-            await this.eSSP.close();
+            // Try to disable device gracefully before closing
+            await this.eSSP.command('DISABLE').catch(() => {});
+            await this.cleanupPort();
+            
             this.log(`NV200 stopped by user: ${this.userId}`);
             // Send final transaction webhook
             await this.sendWebhookForInfo({ name: 'TRANSACTION_COMPLETED' }, this.currentTransaction);
