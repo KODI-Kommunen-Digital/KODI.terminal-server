@@ -53,7 +53,7 @@ class NV200CashMachine {
     async cleanupPort() {
         try {
             if (this.eSSP) {
-                await this.eSSP.close().catch(() => {});
+                await this.eSSP.close();
                 this.log('Port closed successfully');
             }
             // Wait for OS to fully release the port
