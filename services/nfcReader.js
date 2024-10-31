@@ -66,7 +66,7 @@ function start() {
                             if (err) {
                                 log(`Error getting UID: ${err}`, 'ERROR');
                             } else {
-                                const uid = data.toString('hex');
+                                const uid = data.subarray(0, data.length - 2).toString('hex');
                                 log(`Card UID: ${uid}`);
                                 
                                 // Read data from block 4
@@ -75,7 +75,7 @@ function start() {
                                     if (err) {
                                         log(`Error reading data: ${err}`, 'ERROR');
                                     } else {
-                                        const blockData = data.toString('hex');
+                                        const blockData = data.subarray(0, data.length - 2).toString('hex');
                                         log(`Data from card (Block 4): ${blockData}`);
                                         
                                         // Send Webhook notification
