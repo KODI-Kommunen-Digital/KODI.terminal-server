@@ -2,9 +2,12 @@ const pcsclite = require('pcsclite');
 const { sendWebhook } = require('../webhook');
 const fs = require('fs');
 const path = require('path');
+const {sendErrorToDiscord} = require('../utils/errorHandler')
 
 let pcsc;
 let isReaderAvailable = false;
+let tries = 3;
+let noOfTriesRemaning = 0;
 
 const logDir = path.join(__dirname, '..', 'logs', 'nfcReader');
 
@@ -44,7 +47,7 @@ function start() {
 
     pcsc.on('reader', function(reader) {
         log(`Reader detected: ${reader.name}`);
-
+        noOfTriesRemaning = 0;
         reader.on('error', function(err) {
             log(`Reader error: ${err.message}`, 'ERROR');
         });
@@ -104,14 +107,19 @@ function start() {
     });
 
     pcsc.on('error', function(err) {
-        log(`PCSC error: ${err.message}`, 'ERROR');
-        isNFCAvailable = false;
-        log('NFC functionality will be disabled', 'WARN');
+        while(tries > noOfTriesRemaning) {
+            start()
+            log(`PCSC error: ${err.message}`, 'ERROR');
+            isReaderAvailable = false;
+            log('NFC functionality will be disabled', 'WARN');
+            noOfTriesRemaning += 1
+        }
+        sendErrorToDiscord(err)
     });
 }
 
 function isNFCAvailable() {
-    return isNFCAvailable;
+    return isReaderAvailable;
 }
 
 module.exports = { start, isNFCAvailable };

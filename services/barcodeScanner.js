@@ -1,5 +1,6 @@
 const { GlobalKeyboardListener } = require("node-global-key-listener");
 const { sendWebhook } = require('../webhook');
+const {sendErrorToDiscord} = require('../utils/errorHandler')
 
 const v = new GlobalKeyboardListener();
 
@@ -35,6 +36,7 @@ function start() {
     console.log('Global barcode scanner listener started. Scanning will work in the background.');
   } catch (error) {
     console.error('Error starting barcode scanner:', error.message);
+    sendErrorToDiscord(error)
   }
 }
 

@@ -9,6 +9,7 @@ const barcodeScanner = require('./services/barcodeScanner');
 const nfcReader = require('./services/nfcReader');
 const cashMachineRoutes = require('./routes/cashMachineRoutes');
 const posRoutes = require('./routes/posRoutes');
+const { handleErrorWithRes } = require('./utils/errorHandler')
 
 
 
@@ -20,6 +21,7 @@ const message = {
 
 app.use(helmet());
 app.use(bodyParser.json());
+app.use(handleErrorWithRes);
 app.use((err, req, res, _next) => {
     if (err instanceof IpDeniedError) {
         res.status(401).send("Access Denied")
