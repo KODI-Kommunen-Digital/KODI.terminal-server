@@ -3,7 +3,7 @@ const getDateInFormate = require("./getDateInFormate");
 const app = `CONTAINER CITY_ID: ${process.env.CITYID} STORE_ID: ${process.env.STOREID}`;
 
 // Helper function to create error message content
-function createErrorContent(app, message, stack, time, sentryUrl) {
+function createErrorContent(message, stack, time, sentryUrl) {
     return {
         "content": `There was an uncaught exception in your ${app} NodeAPI at ${time}`,
         "embeds": [
@@ -25,7 +25,6 @@ function sendErrorToDiscord(err, sentryEventId = null) {
     
     const occuredAt = new Date();
     const content = createErrorContent(
-        app,
         err.message ? err.message : err,
         err.stack ? err.stack : "",
         getDateInFormate(occuredAt),
