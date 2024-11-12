@@ -41,7 +41,7 @@ function handleErrorWithRes(err, req, res, next) {
     
     if (err.statusCode === 500 && process.env.ENVIRONMENT === 'production') {
         const sentryEventId = res?.sentry || null;
-        sendErrorToDiscord(app, err, sentryEventId);
+        sendErrorToDiscord(err, sentryEventId);
     }
 
     // Send error response to client
