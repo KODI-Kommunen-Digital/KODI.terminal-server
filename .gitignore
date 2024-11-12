@@ -3,3 +3,4 @@
 /logs
 *.log
 appsettings.json
+.DS_store

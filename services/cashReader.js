@@ -4,6 +4,7 @@ const sspLib = require('encrypted-smiley-secure-protocol');
 const fs = require('fs');
 const path = require('path');
 const { sendWebhook } = require('../webhook');
+const {sendErrorToDiscord} = require('../utils/errorHandler')
 
 class NV200CashMachine {
     constructor(port, baudRate, debug, countryCode, userId) {
@@ -414,6 +415,7 @@ class NV200CashMachine {
         if (!started) {
             const errorMessage = `Failed to ${isReset ? 'reinitialize' : 'start'} cash machine after ${maxRetries} attempts`;
             this.log(errorMessage, 'ERROR');
+            sendErrorToDiscord(errorMessage)
             throw new Error(errorMessage);
         }
 
