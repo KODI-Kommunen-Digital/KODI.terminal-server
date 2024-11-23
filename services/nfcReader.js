@@ -54,7 +54,12 @@ function start() {
             if (changes) {
                 if ((changes & this.SCARD_STATE_PRESENT) && (status.state & this.SCARD_STATE_PRESENT)) {
                     log('Card inserted');
-                    reader.connect({ share_mode: this.SCARD_SHARE_SHARED }, function(err, protocol) {
+                    
+                    const connectOptions = {
+                        share_mode: reader.SCARD_SHARE_SHARED,
+                        protocol: reader.SCARD_PROTOCOL_T0 | reader.SCARD_PROTOCOL_T1
+                    };
+                    reader.connect(connectOptions, function(err, protocol) {
                         if (err) {
                             log(`Connection error: ${err}`, 'ERROR');
                             return;
