@@ -90,7 +90,7 @@ function start() {
                                         return;
                                     }
 
-                                    const uid = data.toString('hex'); // Extract UID as hex string
+                                    const uid = data.subarray(0, data.length - 2).toString('hex');
                                     const blockData = null; // Add logic to retrieve block data if necessary
 
                                     sendWebhook({ uid, blockData }, 'nfc')
