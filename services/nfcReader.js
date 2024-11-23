@@ -6,7 +6,6 @@ const debounce = require('lodash.debounce');
 
 let pcsc;
 let isReaderAvailable = false;
-let isProcessingCard = false;
 
 const logDir = path.join(__dirname, '..', 'logs', 'nfcReader');
 
@@ -26,11 +25,6 @@ function log(message, severity = 'INFO') {
 
         if (!fs.existsSync(logDir)) {
             fs.mkdirSync(logDir, { recursive: true });
-        }
-
-        const MAX_LOG_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-        if (fs.existsSync(logFile) && fs.statSync(logFile).size > MAX_LOG_FILE_SIZE) {
-            fs.truncateSync(logFile); // Truncate log file if too large
         }
 
         fs.appendFileSync(logFile, logMessage);
@@ -68,14 +62,12 @@ function start() {
                             return;
                         }
 
-                        isProcessingCard = true;
                         log('Card inserted');
 
                         const connectOptions = {
-                            share_mode: reader.SCARD_SHARE_SHARED,
-                            protocol: reader.SCARD_PROTOCOL_T0 | reader.SCARD_PROTOCOL_T1,
+                            share_mode: reader.SCARD_SHARE_SHARED                        
                         };
-
+                        
                         reader.connect(connectOptions, function (err, protocol) {
                             if (err) {
                                 log(`Connection error: ${err}`, 'ERROR');
@@ -84,35 +76,9 @@ function start() {
                             }
                         
                             try {
-                                // Log the protocol or indicate if it's undefined
-                                if (protocol === undefined) {
-                                    log(`Protocol received is undefined. This indicates a potential communication issue.`, 'ERROR');
-                                    isProcessingCard = false;
-                        
-                                    // Gracefully disconnect and reset the reader
-                                    reader.disconnect(reader.SCARD_RESET_CARD, function (disconnectErr) {
-                                        if (disconnectErr) {
-                                            log(`Error during reader reset after undefined protocol: ${disconnectErr}`, 'ERROR');
-                                        } else {
-                                            log('Reader reset successfully after undefined protocol.', 'INFO');
-                                        }
-                                    });
-                                    return;
-                                }
                         
                                 log(`Connected successfully. Protocol: ${protocol}`);
                         
-                                // Ensure the protocol is valid
-                                if (![reader.SCARD_PROTOCOL_T0, reader.SCARD_PROTOCOL_T1].includes(protocol)) {
-                                    log(`Invalid protocol received: ${protocol}. Supported protocols are T=0 and T=1.`, 'ERROR');
-                                    isProcessingCard = false;
-                                    reader.disconnect(reader.SCARD_RESET_CARD, function (disconnectErr) {
-                                        if (disconnectErr) {
-                                            log(`Error disconnecting after invalid protocol: ${disconnectErr}`, 'ERROR');
-                                        }
-                                    });
-                                    return;
-                                }
                         
                                 // Proceed with operations if protocol is valid
                                 const getUIDCommand = Buffer.from([0xFF, 0xCA, 0x00, 0x00, 0x00]);
@@ -121,58 +87,16 @@ function start() {
                                 reader.transmit(getUIDCommand, 40, protocol, function (err, data) {
                                     if (err) {
                                         log(`Error getting UID: ${err}`, 'ERROR');
-                                        isProcessingCard = false;
                                         return;
                                     }
-                        
-                                    try {
-                                        const uid = data.subarray(0, data.length - 2).toString('hex');
-                                        log(`Card UID: ${uid}`);
-                        
-                                        const readDataCommand = Buffer.from([0xFF, 0xB0, 0x00, 0x04, 0x10]);
-                                        log(`Sending Read Data command: ${readDataCommand.toString('hex')}`);
-                        
-                                        reader.transmit(readDataCommand, 40, protocol, function (err, data) {
-                                            if (err) {
-                                                log(`Error reading data: ${err}`, 'ERROR');
-                                                isProcessingCard = false;
-                                                return;
-                                            }
-                        
-                                            try {
-                                                const blockData = data.subarray(0, data.length - 2).toString('hex');
-                                                log(`Data from card (Block 4): ${blockData}`);
-                        
-                                                sendWebhook({ uid, blockData }, 'nfc')
-                                                    .then(() => log('Webhook sent successfully'))
-                                                    .catch((error) => log(`Error sending Webhook: ${error}`, 'ERROR'))
-                                                    .finally(() => {
-                                                        try {
-                                                            isProcessingCard = false;
-                                                            reader.disconnect(reader.SCARD_LEAVE_CARD, function (disconnectErr) {
-                                                                if (disconnectErr) {
-                                                                    log(`Error disconnecting: ${disconnectErr}`, 'ERROR');
-                                                                } else {
-                                                                    log('Card disconnected successfully');
-                                                                }
-                                                            });
-                                                        } catch (error) {
-                                                            log(`Error during disconnection: ${error}`, 'ERROR');
-                                                        }
-                                                    });
-                                            } catch (error) {
-                                                log(`Error processing card data: ${error}`, 'ERROR');
-                                                isProcessingCard = false;
-                                            }
-                                        });
-                                    } catch (error) {
-                                        log(`Error getting UID: ${error}`, 'ERROR');
-                                        isProcessingCard = false;
-                                    }
+
+                                    sendWebhook({ uid, blockData }, 'nfc')
+                                        .then(() => log('Webhook sent successfully'))
+                                        .catch((error) => log(`Error sending Webhook: ${error}`, 'ERROR'))
+
                                 });
                             } catch (error) {
                                 log(`Unexpected error during connect operation: ${error}`, 'ERROR');
-                                isProcessingCard = false;
                             }
                         });
                         
