@@ -22,15 +22,14 @@ app.use(helmet());
 app.use(bodyParser.json());
 app.use((err, req, res, _next) => {
     if (err instanceof IpDeniedError) {
-        res.status(401).send("Access Denied")
+        res.status(401).send("Access Denied");
     } else {
-      res.status(err.status || 500)
+        res.status(err.status || 500);
     }
-  })
+});
 
-app.use(cors())
-// app.use(headers)
-app.use('/cashMachine', cashMachineRoutes);
+app.use(cors());
+app.use("/cashMachine", cashMachineRoutes);
 
 app.get("/", (req, res) => {
     res.send(message);
@@ -41,8 +40,8 @@ app.use(posRoutes);
 // Catch-all route for handling 404 errors
 app.use((req, res) => {
     res.status(404).json({
-        status: 'error',
-        message: `The URL ${req.originalUrl} does not exist`
+        status: "error",
+        message: `The URL ${req.originalUrl} does not exist`,
     });
 });
 
@@ -50,17 +49,28 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(err.status || 500).json({
-        status: 'error',
-        message: err.message || 'Internal Server Error'
+        status: "error",
+        message: err.message || "Internal Server Error",
     });
-})
+});
 
-
-
+// Start NFC Reader and Barcode Scanner
 nfcReader.start();
 barcodeScanner.start();
 
-const port = process.env.PORT || 3050
+// Check NFC Reader availability periodically and restart if necessary
+setInterval(() => {
+    try {
+        if (!nfcReader.isNFCAvailable()) {
+            console.log("NFC Reader is inactive. Restarting...");
+            nfcReader.start();
+        }
+    } catch (error) {
+        console.error("Error checking NFC Reader status:", error.message);
+    }
+}, 30000); // Check every 30 seconds
+
+const port = process.env.PORT || 3050;
 app.listen(port, () => {
     console.log(`listening on port ${port}`);
 });
