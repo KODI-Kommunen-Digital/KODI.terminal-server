@@ -2,10 +2,10 @@ const pcsclite = require('pcsclite');
 const { sendWebhook } = require('../webhook');
 const fs = require('fs');
 const path = require('path');
-const debounce = require('lodash.debounce');
 
 let pcsc;
 let isReaderAvailable = false;
+let isProcessingCard = false;
 
 const logDir = path.join(__dirname, '..', 'logs', 'nfcReader');
 
@@ -52,7 +52,7 @@ function start() {
                 log(`Reader error: ${err.message}`, 'ERROR');
             });
 
-            const handleStatusChange = debounce(function (status) {
+            reader.on('status', function (status) {
                 try {
                     const changes = this.state ^ status.state;
 
@@ -62,62 +62,72 @@ function start() {
                             return;
                         }
 
+                        isProcessingCard = true;
                         log('Card inserted');
 
                         const connectOptions = {
-                            share_mode: reader.SCARD_SHARE_SHARED                        
+                            share_mode: reader.SCARD_SHARE_SHARED,
                         };
-                        
+
                         reader.connect(connectOptions, function (err, protocol) {
                             if (err) {
-                                log(`Connection error: ${err}`, 'ERROR');
+                                log(`Connection error: ${err.message}`, 'ERROR');
                                 isProcessingCard = false;
                                 return;
                             }
-                        
+
                             try {
-                        
                                 log(`Connected successfully. Protocol: ${protocol}`);
-                        
-                        
-                                // Proceed with operations if protocol is valid
+
+                                // Send Get UID command
                                 const getUIDCommand = Buffer.from([0xFF, 0xCA, 0x00, 0x00, 0x00]);
                                 log(`Sending Get UID command: ${getUIDCommand.toString('hex')}`);
-                        
+
                                 reader.transmit(getUIDCommand, 40, protocol, function (err, data) {
                                     if (err) {
-                                        log(`Error getting UID: ${err}`, 'ERROR');
+                                        log(`Error getting UID: ${err.message}`, 'ERROR');
+                                        isProcessingCard = false;
                                         return;
                                     }
 
+                                    const uid = data.toString('hex'); // Extract UID as hex string
+                                    const blockData = null; // Add logic to retrieve block data if necessary
+
                                     sendWebhook({ uid, blockData }, 'nfc')
                                         .then(() => log('Webhook sent successfully'))
-                                        .catch((error) => log(`Error sending Webhook: ${error}`, 'ERROR'))
-
+                                        .catch((error) => log(`Error sending Webhook: ${error.message}`, 'ERROR'))
+                                        .finally(() => {
+                                            isProcessingCard = false;
+                                        });
                                 });
                             } catch (error) {
-                                log(`Unexpected error during connect operation: ${error}`, 'ERROR');
+                                log(`Unexpected error during connect operation: ${error.message}`, 'ERROR');
+                                isProcessingCard = false;
                             }
                         });
-                        
-                        
                     }
                 } catch (error) {
-                    log(`Unexpected error handling card status: ${error}`, 'ERROR');
+                    log(`Unexpected error handling card status: ${error.message}`, 'ERROR');
+                    isProcessingCard = false;
                 }
-            }, 500); // Debounce by 500ms to prevent duplicate scans
-
-            reader.on('status', handleStatusChange);
+            });
 
             reader.on('end', function () {
                 try {
                     log('Reader removed');
+                    reader.disconnect(reader.SCARD_LEAVE_CARD, function (err) {
+                        if (err) {
+                            log(`Error disconnecting reader: ${err.message}`, 'ERROR');
+                        } else {
+                            log('Reader disconnected');
+                        }
+                    });
                 } catch (error) {
-                    log(`Error handling reader removal: ${error}`, 'ERROR');
+                    log(`Error handling reader removal: ${error.message}`, 'ERROR');
                 }
             });
         } catch (error) {
-            log(`Unexpected error handling reader events: ${error}`, 'ERROR');
+            log(`Unexpected error handling reader events: ${error.message}`, 'ERROR');
         }
     });
 
