@@ -1,136 +1,97 @@
-// paymentRoutes.js
-
 const express = require("express");
-const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 const { encrypt } = require("../utils/AES");
 const axios = require('axios');
-const StoreCardTransactionEnums = require("../constants/databaseEnums")
+const StoreCardTransactionEnums = require("../constants/databaseEnums");
+const Logger = require("../utils/Logger");
 const env = require('dotenv').config().parsed;
-
 
 const router = express.Router();
 
-// Directory for logging
-// const logDir = path.join('logs', 'pos_system');
-// if (!fs.existsSync(logDir)) {
-//     fs.mkdirSync(logDir, { recursive: true });
-// }
-
-
-  
-
-// Helper function to log messages
-// function logMessage(message) {
-//     const timestamp = new Date().toISOString();
-//     const logFile = path.join(logDir, `${new Date().toISOString().split('T')[0]}.log`);
-//     fs.appendFileSync(logFile, `${timestamp}: ${message}\n`);
-// }
-
+// Initialize the logger
 const logDir = path.join(__dirname, '..', 'logs', 'posSystem');
-
-function getLogFilename() {
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = now.toLocaleString('default', { month: 'short' }).toUpperCase();
-    const year = now.getFullYear();
-    return path.join(logDir, `${day}${month}${year}.log`);
-}
-
-function logMessage(message, severity = 'INFO') {
-    const timestamp = new Date().toISOString();
-    const logMessage = `${timestamp} - ${severity}: ${message}\n`;
-    const logFile = getLogFilename();
-
-    // Ensure the log directory exists
-    if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-    }
-
-    fs.appendFile(logFile, logMessage, (err) => {
-        if (err) console.error('Error writing to log file:', err);
-    });
-
-    // Log to console as well
-    console.log(logMessage);
-}
+const logger = new Logger(logDir);
 
 // Define the /startpayment endpoint
 router.post("/startpayment", (req, res) => {
-    logMessage("Received request to /startpayment endpoint");
+    logger.log("Received request to /startpayment endpoint");
 
     const amount = req.body.amount ? req.body.amount : false;
     if (!amount) {
-        logMessage("Amount is not sent", "ERROR");
+        logger.log("Amount is not sent", "ERROR");
         return res.status(400).send("Amount is not sent");
     }
 
     const numAmount = Number(amount);
     if (isNaN(numAmount) || numAmount <= 5 || numAmount > 100) {
-        logMessage(`Invalid amount sent: ${amount}`, "ERROR");
+        logger.log(`Invalid amount sent: ${amount}`, "ERROR");
         return res.status(400).send("Invalid Amount sent");
     }
 
     if (!req.body.cardId ? req.body.cardId : false) {
-        logMessage("CardId is not sent", "ERROR");
+        logger.log("CardId is not sent", "ERROR");
         return res.status(400).send("CardId is not sent");
     }
 
     const cardId = Number(req.body.cardId);
     if (isNaN(cardId)) {
-        logMessage(`Invalid cardId sent: ${cardId}`, "ERROR");
+        logger.log(`Invalid cardId sent: ${cardId}`, "ERROR");
         return res.status(400).send("Invalid cardId sent");
     }
 
-
     if (!req.body.userId ? req.body.userId : false) {
-        logMessage("userId is not sent", "ERROR");
+        logger.log("userId is not sent", "ERROR");
         return res.status(400).send("userId is not sent");
     }
     const userId = Number(req.body.userId);
     if (isNaN(userId)) {
-        logMessage(`Invalid userId sent: ${userId}`, "ERROR");
+        logger.log(`Invalid userId sent: ${userId}`, "ERROR");
         return res.status(400).send("Invalid userId sent");
     }
-    logMessage(`Starting payment process for Amount: ${amount}, CardId: ${cardId}, UserId: ${userId}`);
+
+    logger.log(`Starting payment process for Amount: ${amount}, CardId: ${cardId}, UserId: ${userId}`);
 
     const process = spawn('./Portalum.Zvt.EasyPay.exe', ['--amount', amount, '--no-ui']);
 
     process.stdout.on('data', (data) => {
-        logMessage(`Process stdout: ${data}`);
+        logger.log(`Process stdout: ${data}`);
     });
 
     process.stderr.on('data', (data) => {
-        logMessage(`Process stderr: ${data}`);
+        logger.log(`Process stderr: ${data}`, "ERROR");
     });
 
     process.on('close', async (returnCode) => {
-        logMessage(`Process exited with code ${returnCode}`);
+        logger.log(`Process exited with code ${returnCode}`);
         if (returnCode == 0) {
-            logMessage("Payment process successful");
+            logger.log("Payment process successful");
             // Construct the external API URL
             const apiUrl = env.CONTAINER_API + `/cities/${env.CITYID}/store/${env.STOREID}/user/${userId}/card/addCredit`;
-            const encryptData = encrypt(JSON.stringify({
-                credit: amount,
-                cardId: cardId,
-                source: StoreCardTransactionEnums.source.card
-            }),  env.REACT_APP_ENCRYPTION_KEY,
-            env.REACT_APP_ENCRYPTION_IV)
+            const encryptData = encrypt(
+                JSON.stringify({
+                    credit: amount,
+                    cardId: cardId,
+                    source: StoreCardTransactionEnums.source.card
+                }),
+                env.REACT_APP_ENCRYPTION_KEY,
+                env.REACT_APP_ENCRYPTION_IV
+            );
+            
             // Make the PATCH request
             try {
                 const response = await axios.patch(apiUrl, {
                     storeData: encryptData
                 });
-                logMessage(`API response: ${response.data}`);
+                logger.log(`API response: ${JSON.stringify(response.data)}`);
                 res.send("Success");
             } catch (error) {
-                logMessage(`API Error: ${error}`);
+                logger.log(`API Error: ${error}`, "ERROR");
                 res.status(400).send("Failed");
             }
             
         } else {
-            logMessage(`Payment process failed with status code ${returnCode}`, "ERROR");
+            logger.log(`Payment process failed with status code ${returnCode}`, "ERROR");
             res.status(500).send(`Failed with status code ${returnCode}`);
         }
     });

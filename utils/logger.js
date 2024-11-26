@@ -17,6 +17,7 @@ class Logger {
         const dirName = path.basename(this.logDir).toLowerCase();
         if (dirName.includes('nfc')) return 'NFC Reader';
         if (dirName.includes('cash')) return 'Cash Machine';
+        if (dirName.includes('pos')) return 'POS Machine';
         return 'Unknown Device';
     }
 
