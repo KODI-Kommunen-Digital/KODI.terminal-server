@@ -95,7 +95,7 @@ router.post("/startpayment", (req, res) => {
     }
     logMessage(`Starting payment process for Amount: ${amount}, CardId: ${cardId}, UserId: ${userId}`);
 
-    const process = spawn('./Portalum.Zvt.EasyPay.exe', ['--amount', amount]);
+    const process = spawn('./Portalum.Zvt.EasyPay.exe', ['--amount', amount, '--no-ui']);
 
     process.stdout.on('data', (data) => {
         logMessage(`Process stdout: ${data}`);
