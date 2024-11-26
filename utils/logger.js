@@ -72,7 +72,7 @@ class Logger {
 
                 const payload = {
                     embeds: [{
-                        title: `🚨 ${this.deviceType} Failed - ${this.storeName}`,
+                        title: `🚨 ${this.deviceType} Failed - Store: ${this.storeName}`,
                         description: formattedMessage,
                         color: 0xFF0000,
                         timestamp: new Date().toISOString(),

@@ -7,49 +7,61 @@ let pcsc;
 let isReaderAvailable = false;
 let isProcessingCard = false;
 
-const logDir = path.join(__dirname, '..', 'logs', 'nfcReader');
+const Logger = require('../utils/logger');
 
-function getLogFilename() {
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = now.toLocaleString('default', { month: 'short' }).toUpperCase();
-    const year = now.getFullYear();
-    return path.join(logDir, `${day}${month}${year}.log`);
+function disconnectCard(reader, reason, logger) {
+    reader.disconnect(reader.SCARD_LEAVE_CARD, function (err) {
+        if (err) {
+            logger.log(`Error disconnecting card (${reason}): ${err.message}`, 'ERROR');
+        } else {
+            logger.log(`Card disconnected (${reason})`);
+        }
+    });
+    isProcessingCard = false;
 }
 
-function log(message, severity = 'INFO') {
-    try {
-        const timestamp = new Date().toISOString();
-        const logMessage = `${timestamp} - ${severity}: ${message}\n`;
-        const logFile = getLogFilename();
-
-        if (!fs.existsSync(logDir)) {
-            fs.mkdirSync(logDir, { recursive: true });
+function restartReaderConnection(reader, logger) {
+    logger.log('Restarting connection to the smart card reader...', 'INFO');
+    reader.disconnect(reader.SCARD_UNPOWER_CARD, function (err) {
+        if (err) {
+            logger.log(`Error during reader restart: ${err.message}`, 'ERROR');
+            return;
         }
+        logger.log('Reader successfully disconnected. Attempting to reconnect...', 'INFO');
 
-        fs.appendFileSync(logFile, logMessage);
-    } catch (err) {
-        console.error('Error writing to log file:', err);
-    }
+        // Attempt to reconnect the reader
+        reader.connect({ share_mode: reader.SCARD_SHARE_SHARED }, function (err, protocol) {
+            if (err) {
+                logger.log(`Error reconnecting to the reader: ${err.message}`, 'ERROR');
+                return;
+            }
+            if (!protocol) {
+                logger.log('Protocol still undefined after reconnect attempt', 'ERROR');
+                return;
+            }
+            logger.log('Reader reconnected successfully with a valid protocol');
+        });
+    });
 }
 
 function start() {
+    const logger = new Logger(path.join(__dirname, '..', 'logs', 'nfcReader'));
     try {
         pcsc = pcsclite();
         isReaderAvailable = true;
-        log('NFC Reader service started successfully');
+        logger.log('NFC Reader service started successfully');
     } catch (error) {
-        log(`Failed to start NFC Reader service: ${error.message}`, 'ERROR');
+        logger.log(`Failed to start NFC Reader service: ${error.message}`, 'ERROR');
         isReaderAvailable = false;
         return;
     }
 
     pcsc.on('reader', function (reader) {
         try {
-            log(`Reader detected: ${reader.name}`);
+            logger.log(`Reader detected: ${reader.name}`);
 
             reader.on('error', function (err) {
-                log(`Reader error: ${err.message}`, 'ERROR');
+                logger.log(`Reader error: ${err.message}`, 'ERROR');
             });
 
             reader.on('status', function (status) {
@@ -58,12 +70,12 @@ function start() {
 
                     if (changes && (changes & this.SCARD_STATE_PRESENT) && (status.state & this.SCARD_STATE_PRESENT)) {
                         if (isProcessingCard) {
-                            log('Card already being processed. Ignoring duplicate scan.', 'WARN');
+                            logger.log('Card already being processed. Ignoring duplicate scan.', 'WARN');
                             return;
                         }
 
                         isProcessingCard = true;
-                        log('Card inserted');
+                        logger.log('Card inserted');
 
                         const connectOptions = {
                             share_mode: reader.SCARD_SHARE_SHARED,
@@ -71,71 +83,71 @@ function start() {
 
                         reader.connect(connectOptions, function (err, protocol) {
                             if (err) {
-                                log(`Connection error: ${err.message}`, 'ERROR');
+                                logger.log(`Connection error: ${err.message}`, 'ERROR');
                                 isProcessingCard = false;
                                 return;
                             }
 
-                            try {
-                                log(`Connected successfully. Protocol: ${protocol}`);
+                            if (!protocol) {
+                                logger.log('Protocol undefined after connect', 'ERROR');
+                                disconnectCard(reader, 'protocol undefined', logger);
+                                // restartReaderConnection(reader, logger); // Restart the connection
+                                return;
+                            }
 
-                                // Send Get UID command
+
+                            try {
+                                logger.log(`Connected successfully. Protocol: ${protocol}`);
+
                                 const getUIDCommand = Buffer.from([0xFF, 0xCA, 0x00, 0x00, 0x00]);
-                                log(`Sending Get UID command: ${getUIDCommand.toString('hex')}`);
+                                logger.log(`Sending Get UID command: ${getUIDCommand.toString('hex')}`);
 
                                 reader.transmit(getUIDCommand, 40, protocol, function (err, data) {
                                     if (err) {
-                                        log(`Error getting UID: ${err.message}`, 'ERROR');
-                                        isProcessingCard = false;
+                                        logger.log(`Error getting UID: ${err.message}`, 'ERROR');
+                                        disconnectCard(reader, 'transmit error', logger);
                                         return;
                                     }
 
                                     const uid = data.subarray(0, data.length - 2).toString('hex');
-                                    const blockData = null; // Add logic to retrieve block data if necessary
+                                    const blockData = null;
+                                    logger.log(`Scanned card with UID: ${uid}`);
 
                                     sendWebhook({ uid, blockData }, 'nfc')
-                                        .then(() => log('Webhook sent successfully'))
-                                        .catch((error) => log(`Error sending Webhook: ${error.message}`, 'ERROR'))
-                                        .finally(() => {
-                                            isProcessingCard = false;
-                                        });
+                                        .then(() => logger.log('Webhook sent successfully'))
+                                        .catch((error) => logger.log(`Error sending Webhook: ${error.message}`, 'ERROR'))
+                                        .finally(() => disconnectCard(reader, 'normal processing', logger));
                                 });
                             } catch (error) {
-                                log(`Unexpected error during connect operation: ${error.message}`, 'ERROR');
-                                isProcessingCard = false;
+                                logger.log(`Unexpected error during connect operation: ${error.message}`, 'ERROR');
+                                disconnectCard(reader, 'connect error', logger);
                             }
                         });
                     }
                 } catch (error) {
-                    log(`Unexpected error handling card status: ${error.message}`, 'ERROR');
+                    logger.log(`Unexpected error handling card status: ${error.message}`, 'ERROR');
                     isProcessingCard = false;
                 }
             });
 
             reader.on('end', function () {
                 try {
-                    log('Reader removed');
-                    reader.disconnect(reader.SCARD_LEAVE_CARD, function (err) {
-                        if (err) {
-                            log(`Error disconnecting reader: ${err.message}`, 'ERROR');
-                        } else {
-                            log('Reader disconnected');
-                        }
-                    });
+                    logger.log('Reader removed');
+                    disconnectCard(reader, 'reader removal', logger);
                 } catch (error) {
-                    log(`Error handling reader removal: ${error.message}`, 'ERROR');
+                    logger.log(`Error handling reader removal: ${error.message}`, 'ERROR');
                 }
             });
         } catch (error) {
-            log(`Unexpected error handling reader events: ${error.message}`, 'ERROR');
+            logger.log(`Unexpected error handling reader events: ${error.message}`, 'ERROR');
         }
     });
 
     pcsc.on('error', function (err) {
         try {
-            log(`PCSC error: ${err.message}`, 'ERROR');
+            logger.log(`PCSC error: ${err.message}`, 'ERROR');
             isReaderAvailable = false;
-            log('NFC functionality will be disabled', 'WARN');
+            logger.log('NFC functionality will be disabled', 'WARN');
         } catch (error) {
             console.error('Unexpected error handling PCSC error:', error);
         }
