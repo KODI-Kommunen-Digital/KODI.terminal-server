@@ -29,9 +29,9 @@ class Logger {
     getLogFilename() {
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
-        const month = now.toLocaleString('default', { month: 'short' }).toUpperCase();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
         const year = now.getFullYear();
-        return path.join(this.logDir, `${day}${month}${year}.log`);
+        return path.join(this.logDir, `${year}${month}${day}.log`); // Updated to YYYYMMDD for proper sorting
     }
 
     getStackTrace() {
