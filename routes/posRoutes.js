@@ -24,7 +24,7 @@ router.post("/startpayment", (req, res) => {
     }
 
     const numAmount = Number(amount);
-    if (isNaN(numAmount) || numAmount <= 5 || numAmount > 100) {
+    if (isNaN(numAmount) || numAmount <= 0 || numAmount > 100) {
         logger.log(`Invalid amount sent: ${amount}`, "ERROR");
         return res.status(400).send("Invalid Amount sent");
     }
