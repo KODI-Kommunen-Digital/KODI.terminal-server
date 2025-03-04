@@ -115,8 +115,7 @@ router.post("/startpayment", (req, res) => {
                 credit: amount,
                 cardId: cardId,
                 source: StoreCardTransactionEnums.source.card
-            }),  env.REACT_APP_ENCRYPTION_KEY,
-            env.REACT_APP_ENCRYPTION_IV)
+            }),  env.REACT_APP_ENCRYPTION_KEY)
             // Make the PATCH request
             try {
                 const response = await axios.patch(apiUrl, {
