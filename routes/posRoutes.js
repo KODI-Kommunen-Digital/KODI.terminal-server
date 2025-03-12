@@ -57,82 +57,107 @@ function logMessage(message, severity = 'INFO') {
 }
 
 // Define the /startpayment endpoint
-router.post("/startpayment", (req, res) => {
-    logMessage("Received request to /startpayment endpoint");
+router.post("/startpayment", async (req, res) => {
+    try {
+        logMessage("Received request to /startpayment endpoint");
 
-    const amount = req.body.amount ? req.body.amount : false;
-    if (!amount) {
-        logMessage("Amount is not sent", "ERROR");
-        return res.status(400).send("Amount is not sent");
-    }
-
-    const numAmount = Number(amount);
-    if (isNaN(numAmount) || numAmount <= 5 || numAmount > 100) {
-        logMessage(`Invalid amount sent: ${amount}`, "ERROR");
-        return res.status(400).send("Invalid Amount sent");
-    }
-
-    if (!req.body.cardId ? req.body.cardId : false) {
-        logMessage("CardId is not sent", "ERROR");
-        return res.status(400).send("CardId is not sent");
-    }
-
-    const cardId = Number(req.body.cardId);
-    if (isNaN(cardId)) {
-        logMessage(`Invalid cardId sent: ${cardId}`, "ERROR");
-        return res.status(400).send("Invalid cardId sent");
-    }
-
-
-    if (!req.body.userId ? req.body.userId : false) {
-        logMessage("userId is not sent", "ERROR");
-        return res.status(400).send("userId is not sent");
-    }
-    const userId = Number(req.body.userId);
-    if (isNaN(userId)) {
-        logMessage(`Invalid userId sent: ${userId}`, "ERROR");
-        return res.status(400).send("Invalid userId sent");
-    }
-    logMessage(`Starting payment process for Amount: ${amount}, CardId: ${cardId}, UserId: ${userId}`);
-
-    const process = spawn('./Portalum.Zvt.EasyPay.exe', ['--amount', amount]);
-
-    process.stdout.on('data', (data) => {
-        logMessage(`Process stdout: ${data}`);
-    });
-
-    process.stderr.on('data', (data) => {
-        logMessage(`Process stderr: ${data}`);
-    });
-
-    process.on('close', async (returnCode) => {
-        logMessage(`Process exited with code ${returnCode}`);
-        if (returnCode == 0) {
-            logMessage("Payment process successful");
-            // Construct the external API URL
-            const apiUrl = env.CONTAINER_API + `/cities/${env.CITYID}/store/${env.STOREID}/user/${userId}/card/addCredit`;
-            const encryptData = encrypt(JSON.stringify({
-                credit: amount,
-                cardId: cardId,
-                source: StoreCardTransactionEnums.source.card
-            }),  env.REACT_APP_ENCRYPTION_KEY)
-            // Make the PATCH request
-            try {
-                const response = await axios.patch(apiUrl, {
-                    storeData: encryptData
-                });
-                logMessage(`API response: ${response.data}`);
-                res.send("Success");
-            } catch (error) {
-                logMessage(`API Error: ${error}`);
-                res.status(400).send("Failed");
-            }
-            
-        } else {
-            logMessage(`Payment process failed with status code ${returnCode}`, "ERROR");
-            res.status(500).send(`Failed with status code ${returnCode}`);
+        const cartId = Number(req.body.cartId);
+        if (isNaN(cartId)) {
+            logMessage(`Invalid cartId sent: ${cartId}`, "ERROR");
+            return res.status(400).send("Invalid cartId sent");
         }
-    });
+
+        if (!req.body.userId) {
+            logMessage("userId is not sent", "ERROR");
+            return res.status(400).send("userId is not sent");
+        }
+
+        const userId = Number(req.body.userId);
+        if (isNaN(userId)) {
+            logMessage(`Invalid userId sent: ${userId}`, "ERROR");
+            return res.status(400).send("Invalid userId sent");
+        }
+
+        let amount = 0;
+        let paymentId = 0;
+
+        const apiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/createTransaction`;
+        const encryptData = encrypt(
+            JSON.stringify({ cartId, userId }),
+            env.REACT_APP_ENCRYPTION_KEY
+        );
+
+        try {
+            const response = await axios.post(apiUrl, { storeData: encryptData });
+            logMessage(`API response: ${JSON.stringify(response.data)}`);
+
+            amount = response.data.order.amount;
+            paymentId = response.data.order.paymentId;
+        } catch (error) {
+            logMessage(`API Error: ${error.message}`, "ERROR");
+            return res.status(400).send("Failed");
+        }
+
+        logMessage(`Starting payment process for Amount: ${amount}, CartId: ${cartId}, UserId: ${userId}`);
+
+        //setTimeout(async () => {
+        //    logMessage("Simulated payment process successful");
+
+        //    const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
+        //    const updateEncryptData = encrypt(
+        //        JSON.stringify({ paymentId }),
+        //        env.REACT_APP_ENCRYPTION_KEY
+        //    );
+
+        //    try {
+        //        const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
+        //        logMessage(`Update API response: ${JSON.stringify(updateResponse.data)}`);
+        //        res.send("Success");
+        //    } catch (error) {
+        //        logMessage(`Update API Error: ${error.message}`, "ERROR");
+        //        res.status(400).send("Failed");
+        //    }
+        //}, 2000);
+
+        const paymentProcess = spawn("./Portalum.Zvt.EasyPay.exe", ["--amount", amount]);
+
+        paymentProcess.stdout.on("data", (data) => {
+            logMessage(`Process stdout: ${data}`);
+        });
+
+        paymentProcess.stderr.on("data", (data) => {
+            logMessage(`Process stderr: ${data}`);
+        });
+
+        paymentProcess.on("close", async (returnCode) => {
+            logMessage(`Process exited with code ${returnCode}`);
+
+            if (returnCode === 0) {
+                logMessage("Payment process successful");
+
+                const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
+                const updateEncryptData = encrypt(
+                    JSON.stringify({ paymentId }),
+                    env.REACT_APP_ENCRYPTION_KEY
+                );
+
+                try {
+                    const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
+                    logMessage(`Update API response: ${JSON.stringify(updateResponse.data)}`);
+                    res.send("Success");
+                } catch (error) {
+                    logMessage(`Update API Error: ${error.message}`, "ERROR");
+                    res.status(400).send("Failed");
+                }
+            } else {
+                logMessage(`Payment process failed with status code ${returnCode}`, "ERROR");
+                res.status(500).send(`Failed with status code ${returnCode}`);
+            }
+         });
+    } catch (error) {
+        logMessage(`Unexpected error: ${error.message}`, "ERROR");
+        res.status(500).send("Internal Server Error");
+    }
 });
 
 module.exports = router;
