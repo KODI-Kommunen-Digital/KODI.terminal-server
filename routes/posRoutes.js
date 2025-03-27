@@ -78,63 +78,28 @@ router.post("/startpayment", async (req, res) => {
             return res.status(400).send("Failed");
         }
 
-        // logger.log(`Starting payment process for Amount: ${amount}, CartId: ${cartId}, UserId: ${userId}`);
+        logger.log(`Starting payment process for Amount: ${amount}, CartId: ${cartId}, UserId: ${userId}`);
 
-        // Function to simulate the payment process with a delay
-        // const simulatePaymentDelay = () => {
-        //     return new Promise(resolve => {
-        //         setTimeout(() => {
-        //             logger.log("Simulated the time delay");
-        //             resolve(); // Resolve after the timeout
-        //         }, 2000); // 2-second delay
-        //     });
-        // };
 
-        // // Call the function to simulate the delay and await it
-        // await simulatePaymentDelay();
-        
-        // logger.log("Updating the payment");
+        if (env.DEMO_ENV === 'True') {
+            // Function to simulate the payment process with a delay
+            const simulatePaymentDelay = () => {
+                return new Promise(resolve => {
+                    setTimeout(() => {
+                        logger.log("Simulated the time delay");
+                        resolve(); // Resolve after the timeout
+                    }, 2000); // 2-second delay
+                });
+            };
 
-        // const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
-        // const updateEncryptData = encrypt(
-        //     JSON.stringify({ paymentId, status: paymentStatus.paid, externalPaymentId: "xyz123", paymentProviderType: "Stripe" }),
-        //     env.REACT_APP_ENCRYPTION_KEY
-        // );
-
-        // try {
-        //     const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
-        //     logger.log(`Update API response: ${JSON.stringify(updateResponse.data)}`);
-        //     res.send(createResponse.data.data);
-        // } catch (error) {
-        //     logger.log(`Update API Error: ${error.message}`, "ERROR");
-        //     res.status(400).send("Failed");
-        // }
-
-        const paymentProcess = spawn("./Portalum.Zvt.EasyPay.exe", ["--amount", amount]);
-
-        paymentProcess.stdout.on("data", (data) => {
-            logger.log(`Process stdout: ${data}`);
-        });
-
-        paymentProcess.stderr.on("data", (data) => {
-            logger.log(`Process stderr: ${data}`);
-        });
-
-        paymentProcess.on("close", async (returnCode) => {
-            logger.log(`Process exited with code ${returnCode}`);
-            let status = paymentStatus.paid
-
-            if (returnCode === 0) {
-                logger.log("Payment process successful");
-            } 
-            else {
-                status = paymentStatus.failed
-                logger.log(`Payment process failed with status code ${returnCode}`, "ERROR");
-            }
+            // Call the function to simulate the delay and await it
+            await simulatePaymentDelay();
+            
+            logger.log("Updating the payment");
 
             const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
             const updateEncryptData = encrypt(
-                JSON.stringify({ paymentId, status }),
+                JSON.stringify({ paymentId, status: paymentStatus.paid, externalPaymentId: "xyz123", paymentProviderType: "Stripe" }),
                 env.REACT_APP_ENCRYPTION_KEY
             );
 
@@ -146,7 +111,48 @@ router.post("/startpayment", async (req, res) => {
                 logger.log(`Update API Error: ${error.message}`, "ERROR");
                 res.status(400).send("Failed");
             }
-         });
+
+        } else {
+
+            const paymentProcess = spawn("./Portalum.Zvt.EasyPay.exe", ["--amount", amount]);
+    
+            paymentProcess.stdout.on("data", (data) => {
+                logger.log(`Process stdout: ${data}`);
+            });
+    
+            paymentProcess.stderr.on("data", (data) => {
+                logger.log(`Process stderr: ${data}`);
+            });
+    
+            paymentProcess.on("close", async (returnCode) => {
+                logger.log(`Process exited with code ${returnCode}`);
+                let status = paymentStatus.paid
+    
+                if (returnCode === 0) {
+                    logger.log("Payment process successful");
+                } 
+                else {
+                    status = paymentStatus.failed
+                    logger.log(`Payment process failed with status code ${returnCode}`, "ERROR");
+                }
+    
+                const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
+                const updateEncryptData = encrypt(
+                    JSON.stringify({ paymentId, status }),
+                    env.REACT_APP_ENCRYPTION_KEY
+                );
+    
+                try {
+                    const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
+                    logger.log(`Update API response: ${JSON.stringify(updateResponse.data)}`);
+                    res.send(createResponse.data.data);
+                } catch (error) {
+                    logger.log(`Update API Error: ${error.message}`, "ERROR");
+                    res.status(400).send("Failed");
+                }
+             });
+
+        }
     } catch (error) {
         logger.log(`Unexpected error: ${error.message}`, "ERROR");
         res.status(500).send("Internal Server Error");
