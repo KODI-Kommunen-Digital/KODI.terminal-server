@@ -11,7 +11,6 @@ const env = require('dotenv').config().parsed;
 
 
 const router = express.Router();
-
 // Directory for logging
 // const logDir = path.join('logs', 'pos_system');
 // if (!fs.existsSync(logDir)) {
@@ -56,6 +55,15 @@ function logMessage(message, severity = 'INFO') {
     console.log(logMessage);
 }
 
+const paymentStatus = {
+    pending: 1,
+    paid: 2,
+    failed: 3,
+    cancelled: 4,
+    refundPending: 5,
+    refunded: 6
+}
+
 // Define the /startpayment endpoint
 router.post("/startpayment", async (req, res) => {
     try {
@@ -80,7 +88,7 @@ router.post("/startpayment", async (req, res) => {
 
         let amount = 0;
         let paymentId = 0;
-
+        let createResponse = {}
         const apiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/createTransaction`;
         const encryptData = encrypt(
             JSON.stringify({ cartId, userId }),
@@ -88,36 +96,47 @@ router.post("/startpayment", async (req, res) => {
         );
 
         try {
-            const response = await axios.post(apiUrl, { storeData: encryptData });
-            logMessage(`API response: ${JSON.stringify(response.data)}`);
+            createResponse = await axios.post(apiUrl, { storeData: encryptData });
+            logMessage(`API response: ${JSON.stringify(createResponse.data)}`);
 
-            amount = response.data.order.amount;
-            paymentId = response.data.order.paymentId;
+            amount = createResponse.data.data.order.amount;
+            paymentId = createResponse.data.data.order.paymentId;
         } catch (error) {
             logMessage(`API Error: ${error.message}`, "ERROR");
             return res.status(400).send("Failed");
         }
 
-        logMessage(`Starting payment process for Amount: ${amount}, CartId: ${cartId}, UserId: ${userId}`);
+        // logMessage(`Starting payment process for Amount: ${amount}, CartId: ${cartId}, UserId: ${userId}`);
 
-        //setTimeout(async () => {
-        //    logMessage("Simulated payment process successful");
+        // Function to simulate the payment process with a delay
+        // const simulatePaymentDelay = () => {
+        //     return new Promise(resolve => {
+        //         setTimeout(() => {
+        //             logMessage("Simulated the time delay");
+        //             resolve(); // Resolve after the timeout
+        //         }, 2000); // 2-second delay
+        //     });
+        // };
 
-        //    const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
-        //    const updateEncryptData = encrypt(
-        //        JSON.stringify({ paymentId }),
-        //        env.REACT_APP_ENCRYPTION_KEY
-        //    );
+        // // Call the function to simulate the delay and await it
+        // await simulatePaymentDelay();
+        
+        // logMessage("Updating the payment");
 
-        //    try {
-        //        const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
-        //        logMessage(`Update API response: ${JSON.stringify(updateResponse.data)}`);
-        //        res.send("Success");
-        //    } catch (error) {
-        //        logMessage(`Update API Error: ${error.message}`, "ERROR");
-        //        res.status(400).send("Failed");
-        //    }
-        //}, 2000);
+        // const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
+        // const updateEncryptData = encrypt(
+        //     JSON.stringify({ paymentId, status: paymentStatus.paid, externalPaymentId: "xyz123", paymentProviderType: "Stripe" }),
+        //     env.REACT_APP_ENCRYPTION_KEY
+        // );
+
+        // try {
+        //     const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
+        //     logMessage(`Update API response: ${JSON.stringify(updateResponse.data)}`);
+        //     res.send(createResponse.data.data);
+        // } catch (error) {
+        //     logMessage(`Update API Error: ${error.message}`, "ERROR");
+        //     res.status(400).send("Failed");
+        // }
 
         const paymentProcess = spawn("./Portalum.Zvt.EasyPay.exe", ["--amount", amount]);
 
@@ -131,27 +150,29 @@ router.post("/startpayment", async (req, res) => {
 
         paymentProcess.on("close", async (returnCode) => {
             logMessage(`Process exited with code ${returnCode}`);
+            let status = paymentStatus.paid
 
             if (returnCode === 0) {
                 logMessage("Payment process successful");
-
-                const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
-                const updateEncryptData = encrypt(
-                    JSON.stringify({ paymentId }),
-                    env.REACT_APP_ENCRYPTION_KEY
-                );
-
-                try {
-                    const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
-                    logMessage(`Update API response: ${JSON.stringify(updateResponse.data)}`);
-                    res.send("Success");
-                } catch (error) {
-                    logMessage(`Update API Error: ${error.message}`, "ERROR");
-                    res.status(400).send("Failed");
-                }
-            } else {
+            } 
+            else {
+                status = paymentStatus.failed
                 logMessage(`Payment process failed with status code ${returnCode}`, "ERROR");
-                res.status(500).send(`Failed with status code ${returnCode}`);
+            }
+
+            const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
+            const updateEncryptData = encrypt(
+                JSON.stringify({ paymentId, status }),
+                env.REACT_APP_ENCRYPTION_KEY
+            );
+
+            try {
+                const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
+                logMessage(`Update API response: ${JSON.stringify(updateResponse.data)}`);
+                res.send(createResponse.data.data);
+            } catch (error) {
+                logMessage(`Update API Error: ${error.message}`, "ERROR");
+                res.status(400).send("Failed");
             }
          });
     } catch (error) {
