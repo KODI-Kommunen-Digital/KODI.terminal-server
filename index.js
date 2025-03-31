@@ -6,8 +6,8 @@ const helmet = require("helmet");
 const ipfilter = require('express-ipfilter').IpFilter
 const IpDeniedError = require('express-ipfilter').IpDeniedError
 const barcodeScanner = require('./services/barcodeScanner');
-const nfcReader = require('./services/nfcReader');
-const cashMachineRoutes = require('./routes/cashMachineRoutes');
+//const nfcReader = require('./services/nfcReader');
+//const cashMachineRoutes = require('./routes/cashMachineRoutes');
 const posRoutes = require('./routes/posRoutes');
 
 
@@ -29,7 +29,7 @@ app.use((err, req, res, _next) => {
 });
 
 app.use(cors());
-app.use("/cashMachine", cashMachineRoutes);
+//app.use("/cashMachine", cashMachineRoutes);
 
 app.get("/", (req, res) => {
     res.send(message);
@@ -55,20 +55,20 @@ app.use((err, req, res, next) => {
 });
 
 // Start NFC Reader and Barcode Scanner
-nfcReader.start();
+//nfcReader.start();
 barcodeScanner.start();
 
-// Check NFC Reader availability periodically and restart if necessary
-setInterval(() => {
-    try {
-        if (!nfcReader.isNFCAvailable()) {
-            console.log("NFC Reader is inactive. Restarting...");
-            nfcReader.start();
-        }
-    } catch (error) {
-        console.error("Error checking NFC Reader status:", error.message);
-    }
-}, 30000); // Check every 30 seconds
+//// Check NFC Reader availability periodically and restart if necessary
+//setInterval(() => {
+//    try {
+//        if (!nfcReader.isNFCAvailable()) {
+//            console.log("NFC Reader is inactive. Restarting...");
+//            nfcReader.start();
+//        }
+//    } catch (error) {
+//        console.error("Error checking NFC Reader status:", error.message);
+//    }
+//}, 30000); // Check every 30 seconds
 
 const port = process.env.PORT || 3050;
 app.listen(port, () => {
