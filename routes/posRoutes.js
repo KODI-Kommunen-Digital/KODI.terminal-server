@@ -133,7 +133,7 @@ router.post("/startpayment", async (req, res) => {
                 } 
                 else {
                     status = paymentStatus.failed
-                    logger.log(`Payment process failed with status code ${returnCode}`, "ERROR");
+                    logger.log(`Payment process failed with status code ${returnCode}`);
                 }
     
                 const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
