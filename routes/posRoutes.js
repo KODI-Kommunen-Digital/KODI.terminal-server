@@ -114,7 +114,7 @@ router.post("/startpayment", async (req, res) => {
 
         } else {
 
-            const paymentProcess = spawn("./Portalum.Zvt.EasyPay.exe", ["--amount", amount]);
+            const paymentProcess = spawn("./Portalum.Zvt.EasyPay.exe", ["--amount", amount, "--no-ui"]);
     
             paymentProcess.stdout.on("data", (data) => {
                 logger.log(`Process stdout: ${data}`);
@@ -145,7 +145,7 @@ router.post("/startpayment", async (req, res) => {
                 try {
                     const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
                     logger.log(`Update API response: ${JSON.stringify(updateResponse.data)}`);
-                    res.send(createResponse.data.data);
+                    res.send(updateResponse.data.data);
                 } catch (error) {
                     logger.log(`Update API Error: ${error.message}`, "ERROR");
                     res.status(400).send("Failed");
