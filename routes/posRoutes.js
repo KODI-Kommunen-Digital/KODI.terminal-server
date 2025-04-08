@@ -27,6 +27,46 @@ const router = express.Router();
 const logDir = path.join(__dirname, '..', 'logs', 'posSystem');
 const logger = new Logger(logDir);
 
+/**
+ * Extracts JSON data from log output
+ * @param {string} logOutput - The full log output containing JSON
+ * @returns {object|null} - Parsed JSON object or null if extraction fails
+ */
+function extractJsonFromLog(logOutput) {
+    try {
+        // Find the last opening curly brace
+        const jsonStartIndex = logOutput.lastIndexOf('{');
+        if (jsonStartIndex === -1) return null;
+        
+        // Get substring from the last opening brace to the end
+        const jsonSubstring = logOutput.substring(jsonStartIndex);
+        
+        // Find matching closing brace
+        let braceCount = 0;
+        let endIndex = -1;
+        
+        for (let i = 0; i < jsonSubstring.length; i++) {
+            if (jsonSubstring[i] === '{') braceCount++;
+            else if (jsonSubstring[i] === '}') {
+                braceCount--;
+                if (braceCount === 0) {
+                    endIndex = i;
+                    break;
+                }
+            }
+        }
+        
+        if (endIndex === -1) return null;
+        
+        // Extract the JSON string and parse it
+        const jsonString = jsonSubstring.substring(0, endIndex + 1);
+        return JSON.parse(jsonString);
+    } catch (error) {
+        logger.log(`Error extracting JSON from log: ${error.message}`, "ERROR");
+        return null;
+    }
+}
+
 const paymentStatus = {
     pending: 1,
     paid: 2,
@@ -99,7 +139,7 @@ router.post("/startpayment", async (req, res) => {
 
             const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
             const updateEncryptData = encrypt(
-                JSON.stringify({ paymentId, status: paymentStatus.paid, externalPaymentId: "xyz123", paymentProviderType: "Stripe" }),
+                JSON.stringify({ paymentId, status: paymentStatus.paid, externalPaymentId: "xyz123", paymentProviderType: "Stripe", metadata: {} }),
                 env.REACT_APP_ENCRYPTION_KEY
             );
 
@@ -113,11 +153,18 @@ router.post("/startpayment", async (req, res) => {
             }
 
         } else {
-
-            const paymentProcess = spawn("./Portalum.Zvt.EasyPay.exe", ["--amount", amount, "--no-ui"]);
+            
+            const paymentProcess = spawn("./Portalum.Zvt.EasyPay.exe", [
+                "--amount", amount, 
+                "--ip", env.PAYMENT_TERMINAL_IP || "127.0.0.1", 
+                "--port", env.PAYMENT_TERMINAL_PORT || "5577"
+            ]);
     
+            let responseData = '';
+            
             paymentProcess.stdout.on("data", (data) => {
                 logger.log(`Process stdout: ${data}`);
+                responseData += data.toString();
             });
     
             paymentProcess.stderr.on("data", (data) => {
@@ -126,19 +173,54 @@ router.post("/startpayment", async (req, res) => {
     
             paymentProcess.on("close", async (returnCode) => {
                 logger.log(`Process exited with code ${returnCode}`);
-                let status = paymentStatus.paid
+                let status = paymentStatus.pending;
+                let paymentMetadata = {};
     
-                if (returnCode === 0) {
-                    logger.log("Payment process successful");
-                } 
-                else {
-                    status = paymentStatus.failed
-                    logger.log(`Payment process failed with status code ${returnCode}`);
+                try {
+                    // Parse the JSON response from the payment terminal
+                    const terminalResponse = extractJsonFromLog(responseData);
+                    if (!terminalResponse) {
+                        throw new Error('Failed to extract JSON from terminal output');
+                    }
+                    
+                    logger.log(`Parsed terminal response: ${JSON.stringify(terminalResponse)}`);
+                    
+                    // Extract metadata from the response
+                    paymentMetadata = {
+                        // cardName: terminalResponse.CardName,
+                        // cardNumber: terminalResponse.CardNumber,
+                        // receiptNumber: terminalResponse.ReceiptNumber,
+                        // traceNumber: terminalResponse.TraceNumber,
+                        // amount: terminalResponse.Amount,
+                        // startTime: terminalResponse.StartTime,
+                        // endTime: terminalResponse.EndTime,
+                        status: terminalResponse.Status === "success" ? paymentStatus.paid : paymentStatus.failed,
+                        error: terminalResponse.Error
+                    };
+                    
+                    // Determine payment status based on terminal response status
+                    if (terminalResponse.Status === "success") {
+                        status = paymentStatus.paid;
+                        logger.log("Payment process successful");
+                    } else {
+                        status = paymentStatus.failed;
+                        logger.log(`Payment terminal returned failure status: ${terminalResponse.Error}`);
+                    }
+                } catch (parseError) {
+                    status = paymentStatus.failed;
+                    logger.log(`Failed to parse terminal response: ${parseError.message}`, "ERROR");
+                    logger.log(`Raw response data: ${responseData}`);
                 }
     
                 const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
                 const updateEncryptData = encrypt(
-                    JSON.stringify({ paymentId, status }),
+                    JSON.stringify({ 
+                        paymentId, 
+                        status, 
+                        externalPaymentId: paymentMetadata.receiptNumber || "unknown",
+                        paymentProviderType: "CardTerminal",
+                        metadata: paymentMetadata 
+                    }),
                     env.REACT_APP_ENCRYPTION_KEY
                 );
     
