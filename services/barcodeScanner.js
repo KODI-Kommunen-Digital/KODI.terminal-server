@@ -1,5 +1,6 @@
 const { GlobalKeyboardListener } = require("node-global-key-listener");
 const { sendWebhook } = require('../webhook');
+const loggerText  = require("../utils/loggerText");
 
 const v = new GlobalKeyboardListener();
 
@@ -10,16 +11,18 @@ let timeoutId = null;
 let shiftPressed = false;
 
 function handleInput(e) {
-
+  loggerText.info("hanle input started")
   // Cancel the existing timeout because we’re building a code
   if (timeoutId) {
     clearTimeout(timeoutId);
+    loggerText.info("Existing timeout cleared");
   }
 
   let typedChar = null;
 
   // --- 1) If the user/scanner pressed SHIFT (down/up) ---
   if ((e.name === 'LEFT SHIFT' || e.name === 'RIGHT SHIFT')) {
+    loggerText.info(`SHIFT key event: ${e.name}, state: ${e.state}`);
     if (e.state === 'DOWN') {
       shiftPressed = true;
     } else if (e.state === 'UP') {
@@ -31,15 +34,18 @@ function handleInput(e) {
 
   // --- 2) For everything else, check if it's a key-down event ---
   if (e.state === 'DOWN') {
+    loggerText.info(`Key down: name=${e.name}, character=${e.character}`);
     // If e.character is one printable character, we can use it
     if (e.character && e.character.length === 1) {
       typedChar = e.character;
+      loggerText.info(`Typed character from e.character: '${typedChar}'`);
     } else {
       // Fallback for special keys
       switch (e.name) {
         // If your scanner truly sends SHIFT + DOT for a colon, map it here
         case 'DOT':
           typedChar = shiftPressed ? ':' : '.';
+          loggerText.info(`Mapped DOT to '${typedChar}'`);
           break;
 
         // If you see letters come in as separate SHIFT + letter events:
@@ -51,18 +57,21 @@ function handleInput(e) {
         case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
         case 'Y': case 'Z':
           typedChar = shiftPressed ? e.name.toUpperCase() : e.name.toLowerCase();
+          loggerText.info(`Mapped alpha key '${e.name}' with shift=${shiftPressed} to '${typedChar}'`);
           break;
 
         // If you see digits come in with name='1','2','3'..., just use them
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
           typedChar = e.name;
+          loggerText.info(`Numeric key used: '${typedChar}'`);
           break;
 
         default:
           // If it's a single-character name, use it as-is
           if (e.name && e.name.length === 1) {
             typedChar = e.name;
+            loggerText.info(`Default key used: '${typedChar}'`);
           }
           break;
       }
@@ -71,16 +80,22 @@ function handleInput(e) {
 
   if (typedChar) {
     inputBuffer += typedChar;
+    loggerText.info(`Appended to inputBuffer: '${typedChar}', current buffer: '${inputBuffer}'`);
   }
 
   timeoutId = setTimeout(() => {
     if (inputBuffer.length > 0) {
       console.log('Barcode scanned:', inputBuffer);
-
+      loggerText.info(`Barcode scanned:${inputBuffer}`)
       sendWebhook({ barcodeData: inputBuffer }, 'barcode')
-        .then(() => console.log('Webhook sent successfully for product scan'))
-        .catch(error => console.error('Error sending webhook for product scan:', error));
-
+      .then(() => {
+        console.log('Webhook sent successfully for product scan');
+        loggerText.info('Webhook sent successfully for product scan');
+      })
+      .catch(error => {
+        console.error('Error sending webhook for product scan:', error);
+        loggerText.error(`Error sending webhook for product scan: ${error?.message || error}`);
+      });
       inputBuffer = '';
     }
   }, 100);
@@ -90,8 +105,10 @@ function start() {
   try {
     v.addListener(handleInput);
     console.log('Global barcode scanner listener started. Scanning will work in the background.');
+    loggerText.info('Global barcode scanner listener started. Scanning will work in the background.')
   } catch (error) {
     console.error('Error starting barcode scanner:', error.message);
+    loggerText.error(`Error starting barcode scanner:${error.message}`)
   }
 }
 
@@ -175,10 +192,16 @@ process.on('SIGINT', () => {
     timeoutId = setTimeout(() => {
       if (inputBuffer.length > 0) {
         console.log('Barcode scanned:', inputBuffer);
-  
+        loggerText.info(`Barcode scanned:${inputBuffer}`)
         sendWebhook({ barcodeData: inputBuffer }, 'barcode')
-          .then(() => console.log('Webhook sent successfully for product scan'))
-          .catch(error => console.error('Error sending webhook for product scan:', error));
+        .then(() => {
+          console.log('Webhook sent successfully for product scan');
+          loggerText.info('Webhook sent successfully for product scan');
+        })
+        .catch(error => {
+          console.error('Error sending webhook for product scan:', error);
+          loggerText.error(`Error sending webhook for product scan: ${error}`);
+        });
   
         inputBuffer = '';
       }
@@ -189,8 +212,10 @@ process.on('SIGINT', () => {
     try {
       v.addListener(handleInput);
       console.log('Global barcode scanner listener started. Scanning will work in the background.');
+      loggerText.info('Global barcode scanner listener started. Scanning will work in the background.')
     } catch (error) {
       console.error('Error starting barcode scanner:', error.message);
+      loggerText.error(`Error starting barcode scanner:${error.message}`)
     }
   }
   
@@ -198,12 +223,14 @@ process.on('SIGINT', () => {
   process.on('SIGINT', () => {
     v.kill();
     console.log('Stopping barcode scanner...');
+    loggerText.info('Stopping barcode scanner...');
     process.exit();
   });
   
   module.exports = { start };
   
   console.log('Stopping barcode scanner...');
+  loggerText.info('Stopping barcode scanner...');
   process.exit();
 });
 

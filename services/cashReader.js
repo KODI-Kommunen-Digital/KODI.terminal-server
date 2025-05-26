@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const { sendWebhook } = require('../webhook');
 const Logger = require('../utils/logger');
+const loggerText  = require('../utils/loggerText');
+
 
 class NV200CashMachine {
     constructor(port, baudRate, debug, countryCode, userId) {
@@ -44,6 +46,7 @@ class NV200CashMachine {
 
     // Add method to check if enough time has passed since last reset
     canAttemptReset() {
+        loggerText.info("canattempt reset started")
         if (!this.lastResetTime) return true;
         const minTimeBetweenResets = 30000; // 30 seconds
         return Date.now() - this.lastResetTime >= minTimeBetweenResets;
@@ -55,11 +58,15 @@ class NV200CashMachine {
             if (this.eSSP) {
                 await this.eSSP.close();
                 this.logger.log('Port closed successfully');
+                loggerText.info('Port closed successfully');
+
             }
             // Wait for OS to fully release the port
             await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (error) {
             this.logger.log(`Port cleanup error: ${error.message}`, 'ERROR');
+            loggerText.error(`Port cleanup error: ${error.message}`);
+
             throw error;
         }
     }
@@ -69,6 +76,8 @@ class NV200CashMachine {
             this.inventory[denomination.label]++;
             this.totalAmount += denomination.value;
             this.logger.log(`Updated inventory: ${denomination.label} added. New count: ${this.inventory[denomination.label]}. Total amount: ${this.totalAmount/100} EUR`);
+            loggerText.info(`Updated inventory: ${denomination.label} added. New count: ${this.inventory[denomination.label]}. Total amount: ${this.totalAmount/100} EUR`);
+
             
             // Update currentTransaction
             this.currentTransaction.totalAmount += denomination.value;
@@ -82,6 +91,8 @@ class NV200CashMachine {
             }
         } else {
             this.logger.log(`Unknown denomination: ${denomination.label}`, 'WARN');
+            loggerText.warn(`Unknown denomination: ${denomination.label}`, 'WARN');
+
         }
     }
 
@@ -96,24 +107,34 @@ class NV200CashMachine {
                         country_code: this.countryCode
                     });
                     this.logger.log(`Get denomination route result for ${denom.label}: ${JSON.stringify(result)}`);
+                    loggerText.info(`Get denomination route result for ${denom.label}: ${JSON.stringify(result)}`);
+
 
                     if (result.status === 'OK') {
                         inventory[denom.label] = result.info.route;
                     } else {
                         this.logger.log(`Failed to get denomination route for ${denom.label}: ${result.status}`, 'WARN');
+                        loggerText.warn(`Failed to get denomination route for ${denom.label}: ${result.status}`);
+
                         inventory[denom.label] = 'Unknown';
                     }
                 } catch (error) {
                     this.logger.log(`Error getting denomination route for ${denom.label}: ${error.message}`, 'ERROR');
+                    loggerText.error(`Error getting denomination route for ${denom.label}: ${error.message}`);
+
                     inventory[denom.label] = 'Error';
                 }
             }
 
             this.logger.log(`Current note inventory: ${JSON.stringify(inventory)}`);
+            loggerText.info(`Current note inventory: ${JSON.stringify(inventory)}`);
+
             return inventory;
 
         } catch (error) {
             this.logger.log(`Error getting note inventory: ${error.message}`, 'ERROR');
+            loggerText.error(`Error getting note inventory: ${error.message}`);
+
             throw error;
         }
     }
@@ -126,14 +147,19 @@ class NV200CashMachine {
                 country_code: this.countryCode,
             });
             this.logger.log(`Set denomination route result for ${value} ${this.countryCode}: ${JSON.stringify(result)}`);
+            loggerText.info(`Set denomination route result for ${value} ${this.countryCode}: ${JSON.stringify(result)}`);
+
 
             if (result.status !== 'OK') {
+                loggerText.error(`Failed to set denomination route for ${value} ${this.countryCode}: ${result.status}`);
                 throw new Error(`Failed to set denomination route for ${value} ${this.countryCode}: ${result.status}`);
             }
 
             return result;
         } catch (error) {
             this.logger.log(`Error setting denomination route: ${error.message}`, 'ERROR');
+            loggerText.error(`Error setting denomination route: ${error.message}`);
+
             throw error;
         }
     }
@@ -142,9 +168,13 @@ class NV200CashMachine {
         try {
             const result = await this.eSSP.command('FLOAT_AMOUNT', { amount });
             this.logger.log(`Float amount result: ${JSON.stringify(result)}`);
+            loggerText.info(`Float amount result: ${JSON.stringify(result)}`);
+
             return result;
         } catch (error) {
             this.logger.log(`Error floating amount: ${error.message}`, 'ERROR');
+            loggerText.error(`Error floating amount: ${error.message}`);
+
             throw error;
         }
     }
@@ -156,8 +186,11 @@ class NV200CashMachine {
             // Try to open the port
             await this.eSSP.open(this.port, this.portOptions);
             this.logger.log(`NV200 connected on ${this.port}`);
+            loggerText.info(`NV200 connected on ${this.port}`);
+
         } catch (error) {
             this.logger.log(`Initialization error: ${error.message}`, 'ERROR');
+            loggerText.error(`Initialization error: ${error.message}`);
             throw error;
         }
     }
@@ -166,8 +199,12 @@ class NV200CashMachine {
         try {
             const enableResult = await this.eSSP.command('ENABLE');
             this.logger.log(`Enable result: ${JSON.stringify(enableResult)}`);
+            loggerText.info(`Enable result: ${JSON.stringify(enableResult)}`);
+
         } catch (error) {
             this.logger.log(`Enable error: ${error.message}`, 'ERROR');
+            loggerText.error(`Enable error: ${error.message}`);
+
             throw error;
         }
     }
@@ -176,9 +213,11 @@ class NV200CashMachine {
         try {
             const result = await this.eSSP.command('GET_SERIAL_NUMBER');
             this.logger.log(`NV200 Serial number: ${result.info.serial_number}`);
+            loggerText.info(`NV200 Serial number: ${result.info.serial_number}`);
             return result.info.serial_number;
         } catch (error) {
             this.logger.log(`Failed to get serial number: ${error.message}`, 'ERROR');
+            loggerText.error(`Failed to get serial number: ${error.message}`);
             throw error;
         }
     }
@@ -194,12 +233,16 @@ class NV200CashMachine {
                     this.handlePollInfo(pollResult.info);
                 } else {
                     this.logger.log(`Unexpected info structure: ${JSON.stringify(pollResult.info)}`, 'WARN');
+                    loggerText.warn(`Unexpected info structure: ${JSON.stringify(pollResult.info)}`);
+
                 }
             }
             
             return pollResult;
         } catch (error) {
             this.logger.log(`Polling error: ${error.message}`, 'ERROR');
+            loggerText.error(`Polling error: ${error.message}`);
+
             throw error;
         }
     }
@@ -208,9 +251,11 @@ class NV200CashMachine {
         try {
             const payoutResult = await this.eSSP.command('PAYOUT_AMOUNT', { amount });
             this.logger.log(`Payout result: ${JSON.stringify(payoutResult)}`);
+            loggerText.info(`Payout result: ${JSON.stringify(payoutResult)}`);
             return payoutResult;
         } catch (error) {
             this.logger.log(`Payout error: ${error.message}`, 'ERROR');
+            loggerText.error(`Payout error: ${error.message}`, 'ERROR');
             throw error;
         }
     }
@@ -219,9 +264,12 @@ class NV200CashMachine {
         try {
             const emptyResult = await this.eSSP.command('EMPTY_ALL');
             this.logger.log(`Cashbox emptied: ${JSON.stringify(emptyResult)}`);
+            loggerText.info(`Cashbox emptied: ${JSON.stringify(emptyResult)}`);
             return emptyResult;
         } catch (error) {
             this.logger.log(`Empty cashbox error: ${error.message}`, 'ERROR');
+            loggerText.error(`Empty cashbox error: ${error.message}`);
+
             throw error;
         }
     }
@@ -231,107 +279,139 @@ class NV200CashMachine {
             return;
         }
         this.logger.log(`Handling info: ${info.name}`);
+        loggerText.info(`Handling info: ${info.name}`);
         let data = null;
         switch (info.name) {
             case 'SLAVE_RESET':
                 this.logger.log('The device has reset itself.', 'WARN');
+                loggerText.warn('The device has reset itself.');
                 this.handleSlaveReset()
                 .then(() => {
                     this.logger.log('Slave reset handled successfully.', 'INFO');
+                    loggerText.info('Slave reset handled successfully.');
                 })
                 .catch((error) => {
                     this.logger.log(`Failed to handle slave reset: ${error.message}`, 'ERROR');
+                    loggerText.error(`Failed to handle slave reset: ${error.message}`);
                 });
                 break;
             case 'DISABLED':
                 this.logger.log('Device is disabled. Attempting to enable...', 'WARN');
+                loggerText.warn('Device is disabled. Attempting to enable...');
                 this.enableDevice();
                 break;
             case 'READ_NOTE':
                 this.currentNote = info.channel;
                 this.logger.log(`Note being read: Channel ${this.currentNote}`);
+                loggerText.info(`Note being read: Channel ${this.currentNote}`);
                 break;
             case 'CREDIT_NOTE':
                 const denomination = this.euroDenominations[info.channel - 1] || { label: 'Unknown', value: 0 };
                 data = denomination;
                 this.logger.log(`Bill inserted and credited: ${JSON.stringify(denomination)}`);
+                loggerText.info(`Bill inserted and credited: ${JSON.stringify(denomination)}`);
                 this.updateInventory(denomination);
                 this.currentNote = null;
                 break;
             case 'NOTE_REJECTING':
                 this.logger.log('Note is being rejected', 'WARN');
+                loggerText.warn('Note is being rejected');
                 break;
             case 'NOTE_REJECTED':
                 this.logger.log('Note has been rejected', 'WARN');
+                loggerText.warn('Note has been rejected');
                 break;
             case 'NOTE_STACKING':
                 this.logger.log('Note is being stacked');
+                loggerText.info('Note is being stacked');
                 break;
             case 'NOTE_STACKED':
                 this.logger.log('Note has been stacked');
+                loggerText.info('Note has been stacked');
                 break;
             case 'FRAUD_ATTEMPT':
                 this.logger.log('Fraud attempt detected', 'ERROR');
+                loggerText.error('Fraud attempt detected');
                 break;
             case 'STACKER_FULL':
                 this.logger.log('Stacker is full', 'WARN');
+                loggerText.warn('Stacker is full');
                 break;
             case 'CASH_BOX_REMOVED':
                 this.logger.log('Cash box has been removed', 'WARN');
+                loggerText.warn('Cash box has been removed');
                 break;
             case 'CASH_BOX_REPLACED':
                 this.logger.log('Cash box has been replaced');
+                loggerText.info('Cash box has been replaced');
                 break;
             case 'NOTE_STORED_IN_PAYOUT':
                 this.logger.log('Note stored in payout device');
+                loggerText.info('Note stored in payout device');
                 break;
             case 'NOTE_DISPENSING':
                 this.logger.log('Note is being dispensed');
+                loggerText.info('Note is being dispensed');
                 break;
             case 'NOTE_DISPENSED':
                 this.logger.log('Note has been dispensed');
+                loggerText.info('Note has been dispensed');
                 break;
             case 'NOTE_TRANSFERRED_TO_STACKER':
                 this.logger.log('Note transferred to stacker');
+                loggerText.info('Note transferred to stacker');
                 break;
             case 'SMART_EMPTYING':
                 this.logger.log('Smart emptying in progress');
+                loggerText.info('Smart emptying in progress');
                 break;
             case 'SMART_EMPTIED':
                 this.logger.log('Smart emptying completed');
+                loggerText.info('Smart emptying completed');
                 break;
             case 'CHANNEL_DISABLE':
                 this.logger.log(`Channel disabled: ${info.description}`, 'WARN');
+                loggerText.warn(`Channel disabled: ${info.description}`);
                 break;
             case 'CHANNEL_ENABLE':
                 this.logger.log(`Channel ${info.channel} enabled`);
+                loggerText.info(`Channel ${info.channel} enabled`);
                 break;
             case 'INITIALISING':
                 this.logger.log('Device is initializing');
+                loggerText.info('Device is initializing');
                 break;
             case 'COIN_MECH_ERROR':
                 this.logger.log('Coin mechanism error', 'ERROR');
+                loggerText.error('Coin mechanism error');
                 break;
             case 'COIN_MECH_JAM':
                 this.logger.log('Coin mechanism jam', 'ERROR');
+                loggerText.error('Coin mechanism jam');
                 break;
             case 'BARCODE_TICKET_VALIDATED':
                 this.logger.log('Barcode ticket validated');
+                loggerText.info('Barcode ticket validated');
                 break;
             case 'BARCODE_TICKET_ACKNOWLEDGE':
                 this.logger.log('Barcode ticket acknowledged');
+                loggerText.info('Barcode ticket acknowledged');
                 break;
             case 'SAFE_JAM':
                 this.logger.log('Safe jam detected', 'ERROR');
+                loggerText.error('Safe jam detected');
                 break;
             case 'UNSAFE_JAM':
                 this.logger.log('Unsafe jam detected', 'ERROR');
+                loggerText.error('Unsafe jam detected');
                 break;
             case 'ERROR':
                 this.logger.log(`Generic error occurred: ${JSON.stringify(info.data)}`, 'ERROR');
+                loggerText.error(`Generic error occurred: ${JSON.stringify(info.data)}`);
                 break;
             default:
                 this.logger.log(`Unhandled info: ${info.name}`, 'WARN');
+                loggerText.warn(`Unhandled info: ${info.name}`);
         }
         this.sendWebhookForInfo(info, data);
     }
@@ -346,15 +426,17 @@ class NV200CashMachine {
         try {
             await sendWebhook(eventData, 'cashreader');
             this.logger.log(`Webhook sent successfully for event: ${info.name}`);
+            loggerText.info(`Webhook sent successfully for event: ${info.name}`);
         } catch (error) {
             this.logger.log(`Error sending webhook for event: ${info.name} - ${error.message}`, 'ERROR');
+            loggerText.error(`Error sending webhook for event: ${info.name} - ${error.message}`);
         }
     }
 
     async initializeAndStart(maxRetries = 3, retryDelay = 2000, isReset = false) {
         let attempts = 0;
         let started = false;
-
+        loggerText.info("initialize and start function started")
         while (attempts < maxRetries && !started) {
             try {
                 await this.initialize();
@@ -372,16 +454,20 @@ class NV200CashMachine {
                         `Cash machine ${isReset ? 'restarted' : 'started'} successfully by user: ${this.userId}`,
                         'INFO'
                     );
+                    loggerText.info(`Cash machine ${isReset ? 'restarted' : 'started'} successfully by user: ${this.userId}`);
                 } else {
+                    loggerText.error('Device not responsive after initialization')
                     throw new Error('Device not responsive after initialization');
                 }
             } catch (error) {
                 attempts++;
                 this.logger.log(`${isReset ? 'Reinitialization' : 'Start'} attempt ${attempts} failed: ${error.message}`, 'WARN');
+                loggerText.warn(`${isReset ? 'Reinitialization' : 'Start'} attempt ${attempts} failed: ${error.message}`);
                 if (attempts < maxRetries) {
                     // Use exponential backoff for retry delays
                     const currentDelay = retryDelay * Math.pow(2, attempts - 1);
                     this.logger.log(`Retrying in ${currentDelay / 1000} seconds...`);
+                    loggerText.info(`Retrying in ${currentDelay / 1000} seconds...`);
                     await new Promise(resolve => setTimeout(resolve, currentDelay));
                 }
             }
@@ -390,6 +476,7 @@ class NV200CashMachine {
         if (!started) {
             const errorMessage = `Failed to ${isReset ? 'reinitialize' : 'start'} cash machine after ${maxRetries} attempts`;
             this.logger.log(errorMessage, 'ERROR');
+            loggerText.error(errorMessage);
             throw new Error(errorMessage);
         }
 
@@ -404,6 +491,7 @@ class NV200CashMachine {
     async handleSlaveReset() {
         if (!this.canAttemptReset()) {
             this.logger.log('Reset attempted too soon after previous reset', 'WARN');
+            loggerText.warn('Reset attempted too soon after previous reset');
             return;
         }
 
@@ -421,6 +509,7 @@ class NV200CashMachine {
             // Wait for device to stabilize - longer delay for more reset attempts
             const stabilizationDelay = Math.min(5000 * this.resetAttempts, 20000);
             this.logger.log(`Waiting ${stabilizationDelay}ms for device to stabilize...`);
+            loggerText.info(`Waiting ${stabilizationDelay}ms for device to stabilize...`);
             await new Promise(resolve => setTimeout(resolve, stabilizationDelay));
 
             // Attempt reinitialization with exponential backoff
@@ -428,8 +517,10 @@ class NV200CashMachine {
             
             this.resetAttempts = 0;
             this.logger.log('Slave reset handled successfully', 'INFO');
+            loggerText.info('Slave reset handled successfully');
         } catch (error) {
             this.logger.log(`Failed to handle slave reset: ${error.message}`, 'ERROR');
+            loggerText.error(`Failed to handle slave reset: ${error.message}`);
             throw error;
         }
     }
@@ -440,6 +531,7 @@ class NV200CashMachine {
                 await this.pollDevice();
             } catch (error) {
                 this.logger.log(`Error during polling: ${error.message}`, 'ERROR');
+                loggerText.error(`Error during polling: ${error.message}`);
             }
         }, 1000);
     }
@@ -452,11 +544,13 @@ class NV200CashMachine {
             await this.cleanupPort();
             
             this.logger.log(`NV200 stopped by user: ${this.userId}`);
+            loggerText.info(`NV200 stopped by user: ${this.userId}`);
             // Send final transaction webhook
             await this.sendWebhookForInfo({ name: 'TRANSACTION_COMPLETED' }, this.currentTransaction);
             return { totalAmount: this.totalAmount, inventory: this.inventory };
         } catch (error) {
             this.logger.log(`Error stopping NV200: ${error.message}`, 'ERROR');
+            loggerText.error(`Error stopping NV200: ${error.message}`);
             throw error;
         }
     }
@@ -470,6 +564,7 @@ module.exports = {
             return nv200;
         } catch (error) {
             console.error('Failed to start NV200:', error);
+            loggerText.error(`Failed to start NV200:${error}`);
             throw error;
         }
     }

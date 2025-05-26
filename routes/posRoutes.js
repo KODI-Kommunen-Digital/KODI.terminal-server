@@ -5,6 +5,7 @@ const { encrypt } = require("../utils/AES");
 const axios = require('axios');
 const StoreCardTransactionEnums = require("../constants/databaseEnums");
 const Logger = require("../utils/Logger");
+const loggerText = require("../utils/loggerText");
 const env = require('dotenv').config().parsed;
 
 const router = express.Router();
@@ -63,6 +64,7 @@ function extractJsonFromLog(logOutput) {
         return JSON.parse(jsonString);
     } catch (error) {
         logger.log(`Error extracting JSON from log: ${error.message}`, "ERROR");
+        loggerText.error(`Error extracting JSON from log: ${error.message}`);
         return null;
     }
 }
@@ -80,21 +82,26 @@ const paymentStatus = {
 router.post("/startpayment", async (req, res) => {
     try {
         logger.log("Received request to /startpayment endpoint");
+        loggerText.info("Received request to /startpayment endpoint");
+
 
         const cartId = Number(req.body.cartId);
         if (isNaN(cartId)) {
             logger.log(`Invalid cartId sent: ${cartId}`, "ERROR");
+            loggerText.error(`Invalid cartId sent: ${cartId}`);
             return res.status(400).send("Invalid cartId sent");
         }
 
         if (!req.body.userId) {
             logger.log("userId is not sent", "ERROR");
+            loggerText.error("userId is not sent");
             return res.status(400).send("userId is not sent");
         }
 
         const userId = Number(req.body.userId);
         if (isNaN(userId)) {
             logger.log(`Invalid userId sent: ${userId}`, "ERROR");
+            logger.error(`Invalid userId sent: ${userId}`);
             return res.status(400).send("Invalid userId sent");
         }
 
@@ -110,15 +117,18 @@ router.post("/startpayment", async (req, res) => {
         try {
             createResponse = await axios.post(apiUrl, { storeData: encryptData });
             logger.log(`API response: ${JSON.stringify(createResponse.data)}`);
+            loggerText.info(`API response: ${JSON.stringify(createResponse.data)}`);
 
             amount = createResponse.data.data.order.amount;
             paymentId = createResponse.data.data.order.paymentId;
         } catch (error) {
             logger.log(`API Error: ${error.message}`, "ERROR");
+            loggerText.error(`API Error: ${error.message}`);
             return res.status(400).send("Failed");
         }
 
         logger.log(`Starting payment process for Amount: ${amount}, CartId: ${cartId}, UserId: ${userId}`);
+        loggerText.info(`Starting payment process for Amount: ${amount}, CartId: ${cartId}, UserId: ${userId}`);
 
 
         if (env.DEMO_ENV === 'True') {
@@ -127,6 +137,7 @@ router.post("/startpayment", async (req, res) => {
                 return new Promise(resolve => {
                     setTimeout(() => {
                         logger.log("Simulated the time delay");
+                        loggerText.info("Simulated the time delay");
                         resolve(); // Resolve after the timeout
                     }, 2000); // 2-second delay
                 });
@@ -136,6 +147,7 @@ router.post("/startpayment", async (req, res) => {
             await simulatePaymentDelay();
             
             logger.log("Updating the payment");
+            loggerText.info("Updating the payment");
 
             const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
             const updateEncryptData = encrypt(
@@ -146,9 +158,11 @@ router.post("/startpayment", async (req, res) => {
             try {
                 const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
                 logger.log(`Update API response: ${JSON.stringify(updateResponse.data)}`);
+                loggerText.info(`Update API response: ${JSON.stringify(updateResponse.data)}`);
                 res.send(createResponse.data.data);
             } catch (error) {
                 logger.log(`Update API Error: ${error.message}`, "ERROR");
+                loggerText.error(`Update API Error: ${error.message}`);
                 res.status(400).send("Failed");
             }
 
@@ -164,15 +178,19 @@ router.post("/startpayment", async (req, res) => {
             
             paymentProcess.stdout.on("data", (data) => {
                 logger.log(`Process stdout: ${data}`);
+                loggerText.info(`Process stdout: ${data}`);
                 responseData += data.toString();
             });
     
             paymentProcess.stderr.on("data", (data) => {
                 logger.log(`Process stderr: ${data}`);
+                loggerText.info(`Process stderr: ${data}`);
+
             });
     
             paymentProcess.on("close", async (returnCode) => {
                 logger.log(`Process exited with code ${returnCode}`);
+                loggerText.info(`Process exited with code ${returnCode}`);
                 let status = paymentStatus.pending;
                 let paymentMetadata = {};
     
@@ -180,10 +198,12 @@ router.post("/startpayment", async (req, res) => {
                     // Parse the JSON response from the payment terminal
                     const terminalResponse = extractJsonFromLog(responseData);
                     if (!terminalResponse) {
+                        loggerText.error('Failed to extract JSON from terminal output');
                         throw new Error('Failed to extract JSON from terminal output');
                     }
                     
                     logger.log(`Parsed terminal response: ${JSON.stringify(terminalResponse)}`);
+                    loggerText.info(`Parsed terminal response: ${JSON.stringify(terminalResponse)}`);
                     
                     // Extract metadata from the response
                     paymentMetadata = {
@@ -202,14 +222,18 @@ router.post("/startpayment", async (req, res) => {
                     if (terminalResponse.Status === "success") {
                         status = paymentStatus.paid;
                         logger.log("Payment process successful");
+                        loggerText.info("Payment process successful");
                     } else {
                         status = paymentStatus.failed;
                         logger.log(`Payment terminal returned failure status: ${terminalResponse.Error}`);
+                        loggerText.error(`Payment terminal returned failure status: ${terminalResponse.Error}`);
                     }
                 } catch (parseError) {
                     status = paymentStatus.failed;
                     logger.log(`Failed to parse terminal response: ${parseError.message}`, "ERROR");
                     logger.log(`Raw response data: ${responseData}`);
+                    loggerText.error(`Failed to parse terminal response: ${parseError.message}`);
+                    loggerText.info(`Raw response data: ${responseData}`);
                 }
     
                 const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
@@ -227,9 +251,11 @@ router.post("/startpayment", async (req, res) => {
                 try {
                     const updateResponse = await axios.post(updateApiUrl, { storeData: updateEncryptData });
                     logger.log(`Update API response: ${JSON.stringify(updateResponse.data)}`);
+                    loggerText.info(`Update API response: ${JSON.stringify(updateResponse.data)}`);
                     res.send(updateResponse.data.data);
                 } catch (error) {
                     logger.log(`Update API Error: ${error.message}`, "ERROR");
+                    logger.error(`Update API Error: ${error.message}`);
                     res.status(400).send("Failed");
                 }
              });
@@ -237,6 +263,7 @@ router.post("/startpayment", async (req, res) => {
         }
     } catch (error) {
         logger.log(`Unexpected error: ${error.message}`, "ERROR");
+        logger.error(`Unexpected error: ${error.message}`);
         res.status(500).send("Internal Server Error");
     }
 });
