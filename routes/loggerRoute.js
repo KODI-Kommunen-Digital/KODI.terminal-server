@@ -15,4 +15,16 @@ loggerRoute.post("/api/logger/logTER", (req, res) => {
   res.json({ status: "logged" });
 });
 
+loggerRoute.post("/api/logger/logArduino", (req, res) => {
+  const { level = "info", message = "", context = {} } = req.body;
+
+  if (typeof loggerText[level] === "function") {
+    loggerText[level](`${message} | Context: ${JSON.stringify(context)} | Arduino`);
+  } else {
+    loggerText.info(`${message} | Context: ${JSON.stringify(context)} | Arduino`);
+  }
+
+  res.json({ status: "logged" });
+});
+
 module.exports = loggerRoute;
