@@ -101,7 +101,7 @@ router.post("/startpayment", async (req, res) => {
         const userId = Number(req.body.userId);
         if (isNaN(userId)) {
             logger.log(`Invalid userId sent: ${userId}`, "ERROR");
-            logger.error(`Invalid userId sent: ${userId}`);
+            // logger.error(`Invalid userId sent: ${userId}`);
             return res.status(400).send("Invalid userId sent");
         }
 
@@ -255,7 +255,7 @@ router.post("/startpayment", async (req, res) => {
                     res.send(updateResponse.data.data);
                 } catch (error) {
                     logger.log(`Update API Error: ${error.message}`, "ERROR");
-                    logger.error(`Update API Error: ${error.message}`);
+                    // logger.error(`Update API Error: ${error.message}`);
                     res.status(400).send("Failed");
                 }
              });
@@ -263,7 +263,7 @@ router.post("/startpayment", async (req, res) => {
         }
     } catch (error) {
         logger.log(`Unexpected error: ${error.message}`, "ERROR");
-        logger.error(`Unexpected error: ${error.message}`);
+        // logger.error(`Unexpected error: ${error.message}`);
         res.status(500).send("Internal Server Error");
     }
 });
