@@ -36,7 +36,7 @@ const logger = new Logger(logDir);
 function extractJsonFromLog(logOutput) {
     try {
         loggerText.info("Extracting JSON from log output");
-        loggerText.info(`Log output: ${logOutput}`);
+        loggerText.info(`Log output: ${logOutput}`); // 4294967294
         // Find the last opening curly brace
         const jsonStartIndex = logOutput.lastIndexOf('{');
         if (jsonStartIndex === -1) return null;
@@ -177,7 +177,10 @@ router.post("/startpayment", async (req, res) => {
                 "--ip", env.PAYMENT_TERMINAL_IP || "127.0.0.1", 
                 "--port", env.PAYMENT_TERMINAL_PORT || "5577"
             ]);
-    
+
+            // print payment process final command
+            loggerText.info(`Payment process started with command: ${env.PAYMENT_TERMINAL_EXECUTABLE || "./Portalum.Zvt.EasyPay.exe"} --amount ${amount} --ip ${env.PAYMENT_TERMINAL_IP || "127.0.1"} --port ${env.PAYMENT_TERMINAL_PORT || "5577"}`);
+
             let responseData = '';
             
             paymentProcess.stdout.on("data", (data) => {
