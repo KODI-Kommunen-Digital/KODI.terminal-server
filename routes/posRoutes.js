@@ -174,8 +174,8 @@ router.post("/startpayment", async (req, res) => {
             
             const paymentProcess = spawn(env.PAYMENT_TERMINAL_EXECUTABLE || "./Portalum.Zvt.EasyPay.exe", [
                 "--amount", amount, 
-                "--ip", env.PAYMENT_TERMINAL_IP || "127.0.0.1", 
-                "--port", env.PAYMENT_TERMINAL_PORT || "5577"
+                // "--ip", env.PAYMENT_TERMINAL_IP || "127.0.0.1", 
+                // "--port", env.PAYMENT_TERMINAL_PORT || "5577"
             ]);
 
             // print payment process final command
