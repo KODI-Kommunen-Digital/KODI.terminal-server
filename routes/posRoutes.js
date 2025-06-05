@@ -35,12 +35,16 @@ const logger = new Logger(logDir);
  */
 function extractJsonFromLog(logOutput) {
     try {
+        loggerText.info("Extracting JSON from log output");
+        loggerText.info(`Log output: ${logOutput}`);
         // Find the last opening curly brace
         const jsonStartIndex = logOutput.lastIndexOf('{');
         if (jsonStartIndex === -1) return null;
         
         // Get substring from the last opening brace to the end
         const jsonSubstring = logOutput.substring(jsonStartIndex);
+
+        loggerText.info(`JSON substring extracted: ${jsonSubstring}`);
         
         // Find matching closing brace
         let braceCount = 0;
