@@ -255,8 +255,12 @@ router.post("/startpayment", async (req, res) => {
                     console.log(`Log file exists: ${fs.existsSync(logFilePath)}`);
                     if (fs.existsSync(logFilePath)) {
                         const logFileContent = fs.readFileSync(logFilePath, 'utf8');
-                        console.log(`Log file content length: ${logFileContent}`);
-                        const successfulLines = logFileContent.includes("Portalum.Zvt.EasyPay.MainWindow StartPaymentAsync - Successful");
+                        const logLines = logFileContent.trim().split('\n');
+                        const last3Lines = logLines.slice(-3);
+                        console.log('Last 4 lines of log file:', last3Lines.join('\n'));
+                        const successfulLines = last3Lines.some(line =>
+                            line.includes("Portalum.Zvt.EasyPay.MainWindow StartPaymentAsync - Successful")
+                        );
                         console.log(`Successful lines: ${successfulLines}`);
                         if (successfulLines) {
                             status = paymentStatus.paid; // Assume success if we find successful lines
