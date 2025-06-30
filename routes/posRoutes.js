@@ -4,7 +4,7 @@ const { spawn } = require("child_process");
 const { encrypt } = require("../utils/AES");
 const axios = require('axios');
 const StoreCardTransactionEnums = require("../constants/databaseEnums");
-const Logger = require("../utils/Logger");
+const Logger = require("../utils/logger");
 const loggerText = require("../utils/loggerText");
 const env = require('dotenv').config().parsed;
 
@@ -241,6 +241,24 @@ router.post("/startpayment", async (req, res) => {
                     logger.log(`Raw response data: ${responseData}`);
                     loggerText.error(`Failed to parse terminal response: ${parseError.message}`);
                     loggerText.info(`Raw response data: ${responseData}`);
+                    paymentMetadata = {
+                        error: parseError.message,
+                    }
+
+                    // get the last 10 lines of log_YYYYmmdd.log file
+                    const logFilePath = `log_${new Date().toISOString().split('T')[0]}.log`;
+                    const fs = require('fs');
+                    if (fs.existsSync(logFilePath)) {
+                        const logFileContent = fs.readFileSync(logFilePath, 'utf8');
+                        const logLines = logFileContent.split('\n');
+                        const lastTenLines = logLines.slice(-10).join('\n');
+                        // search each line for "Portalum.Zvt.EasyPay.MainWindow StartPaymentAsync - Successful"
+                        const successfulLines = lastTenLines.split('\n').filter(line => line.includes("Portalum.Zvt.EasyPay.MainWindow StartPaymentAsync - Successful"));
+                        if (successfulLines.length > 0) {
+                            paymentMetadata.successfulLines = successfulLines;
+                            status = paymentStatus.paid; // Assume success if we find successful lines
+                        }
+                    }
                 }
     
                 const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
