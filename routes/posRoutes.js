@@ -256,17 +256,15 @@ router.post("/startpayment", async (req, res) => {
                     if (fs.existsSync(logFilePath)) {
                         const logFileContent = fs.readFileSync(logFilePath, 'utf8');
                         console.log(`Log file content length: ${logFileContent}`);
-                        const logLines = logFileContent.split('\n');
-                        const lastTenLines = logLines.slice(-10).join('\n');
-                        // search each line for "Portalum.Zvt.EasyPay.MainWindow StartPaymentAsync - Successful"
-                        const successfulLines = lastTenLines.split('\n').filter(line => line.includes("Portalum.Zvt.EasyPay.MainWindow StartPaymentAsync - Successful"));
-                        if (successfulLines.length > 0) {
-                            paymentMetadata.successfulLines = successfulLines;
+                        const successfulLines = lastTenLines.includes("Portalum.Zvt.EasyPay.MainWindow StartPaymentAsync - Successful");
+                        console.log(`Successful lines: ${successfulLines}`);
+                        if (successfulLines) {
                             status = paymentStatus.paid; // Assume success if we find successful lines
                         }
                     }
                 }
     
+                console.log(`Final payment status: ${status}`);
                 const updateApiUrl = `${env.CONTAINER_API}/cities/${env.CITYID}/store/${env.STOREID}/updateTransaction`;
                 const updateEncryptData = encrypt(
                     JSON.stringify({ 
