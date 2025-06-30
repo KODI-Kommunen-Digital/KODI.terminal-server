@@ -272,7 +272,7 @@ router.post("/startpayment", async (req, res) => {
                         status, 
                         externalPaymentId: paymentMetadata.receiptNumber || "unknown",
                         paymentProviderType: "CardTerminal",
-                        metadata: paymentMetadata 
+                        // metadata: paymentMetadata 
                     }),
                     env.REACT_APP_ENCRYPTION_KEY
                 );
