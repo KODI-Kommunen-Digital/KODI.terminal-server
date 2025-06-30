@@ -246,10 +246,15 @@ router.post("/startpayment", async (req, res) => {
                     }
 
                     // get the last 10 lines of log_YYYYmmdd.log file
+                    // sleep for 1 second
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     const logFilePath = `log_${new Date().toISOString().split('T')[0]}.log`;
                     const fs = require('fs');
+                    console.log(`Log file path: ${logFilePath}`);
+                    console.log(`Log file exists: ${fs.existsSync(logFilePath)}`);
                     if (fs.existsSync(logFilePath)) {
                         const logFileContent = fs.readFileSync(logFilePath, 'utf8');
+                        console.log(`Log file content length: ${logFileContent}`);
                         const logLines = logFileContent.split('\n');
                         const lastTenLines = logLines.slice(-10).join('\n');
                         // search each line for "Portalum.Zvt.EasyPay.MainWindow StartPaymentAsync - Successful"
