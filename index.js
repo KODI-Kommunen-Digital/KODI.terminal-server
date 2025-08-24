@@ -9,6 +9,7 @@ const barcodeScanner = require('./services/barcodeScanner');
 //const nfcReader = require('./services/nfcReader');
 //const cashMachineRoutes = require('./routes/cashMachineRoutes');
 const posRoutes = require('./routes/posRoutes');
+const loggerRoute = require("./routes/loggerRoute");
 
 
 
@@ -34,6 +35,7 @@ app.use(cors());
 app.get("/", (req, res) => {
     res.send(message);
 });
+app.use(loggerRoute);
 app.use(posRoutes);
 
 
